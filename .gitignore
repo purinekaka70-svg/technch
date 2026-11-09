@@ -8,3 +8,5 @@ node_modules/
 supabase/
 
 mikrotik/agent/jixels-cloud-agent.local.rsc
+.vercel
+.env*
