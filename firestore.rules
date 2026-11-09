@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All app data reads and writes go through server APIs. Admin SDK access
+    // bypasses these client rules and is protected by verified admin claims.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

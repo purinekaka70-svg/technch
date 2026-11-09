@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#064c35">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Tamu Admin">
+  <title>Technch-hotspot Express Admin</title>
+  <link rel="manifest" href="/admin.webmanifest">
+  <link rel="icon" href="/assets/tamu-express-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/admin-icon-192.png">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin-login.css">
+  <link rel="stylesheet" href="tamu-green.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overviewPage" aria-label="Tamu Express Admin home">
+        <img class="brand-image" src="/assets/tamu-express-logo.svg" alt="Tamu Express">
+        
+      </a>
+      <button id="installApp" class="install-app" type="button" aria-label="Install Tamu Express admin app">
+        <svg class="install-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/></svg><span>Install app</span>
+      </button>
+      <nav class="side-nav" aria-label="Admin navigation">
+        <a class="nav-link active" href="#overviewPage" data-page="overview" aria-current="page">Overview</a>
+        <a class="nav-link" href="#packagesPage" data-page="packages">Packages</a>
+        <a class="nav-link" href="#sessionsPage" data-page="sessions">Sessions</a>
+        <a class="nav-link" href="#revenuePage" data-page="revenue">Payments &amp; revenue</a>
+        <a class="nav-link" href="#routersPage" data-page="routers">Router management</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="network-label"><span class="online-dot"></span><span><b>Tamu Express</b><small>Wi-Fi network</small></span></div>
+        <button id="logout" class="logout" type="button">Sign out</button>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Close navigation"></button>
+
+    <main id="overview" class="main-content">
+      <header class="topbar">
+        <button id="menuToggle" class="menu-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+        <div class="page-heading"><small id="pageEyebrow">BUSINESS MANAGEMENT</small><h1 id="pageTitle">Overview</h1><p id="pageDescription">Monitor your hotspot and billing activity.</p></div>
+        <button id="refresh" class="button button-quiet" type="button"> Refresh</button>
+      </header>
+
+      <section class="cloudpay-health" aria-labelledby="cloudPayHealthTitle">
+        <div><h2 id="cloudPayHealthTitle">CloudPay connection</h2><p id="cloudPayHealthStatus" role="status" aria-live="polite">Not checked</p></div>
+        <button id="checkCloudPay" class="button button-quiet" type="button">Check CloudPay</button>
+      </section>
+
+      <section class="admin-view active" id="overviewPage" data-page-view="overview" aria-labelledby="summaryTitle">
+      <section class="section-block">
+        <div class="section-heading"><div><h2 id="summaryTitle">Business summary</h2><p>Live totals from your billing records.</p></div><span id="updatedAt" class="muted"></span></div>
+        <div id="metrics" class="metrics" aria-live="polite"><div class="metric skeleton"></div><div class="metric skeleton"></div><div class="metric skeleton"></div><div class="metric skeleton"></div></div>
+      </section>
+      </section>
+
+      <section class="admin-view" id="packagesPage" data-page-view="packages" hidden>
+      <section id="packagesSection" class="section-block card-section" aria-labelledby="packagesTitle">
+        <div class="section-heading section-heading-wrap">
+          <div><h2 id="packagesTitle">Wi-Fi packages</h2><p>Add plans, update prices and control what customers can buy.</p></div>
+          <button id="add" class="button button-primary" type="button"> Add package</button>
+        </div>
+        <div class="toolbar">
+          <label class="search-box"><input id="packageSearch" type="search" placeholder="Search packages" aria-label="Search packages"></label>
+          <label class="filter-box"><span class="visually-hidden">Filter packages</span><select id="packageFilter"><option value="all">All packages</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+          <span id="packageTotal" class="result-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Package</th><th>Price</th><th>Duration</th><th>Sales</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="packages"><tr><td colspan="6" class="table-message">Loading packages...</td></tr></tbody></table>
+        </div>
+      </section>
+      </section>
+
+      <section class="admin-view" id="sessionsPage" data-page-view="sessions" hidden>
+        <section id="sessionsSection" class="section-block card-section" aria-labelledby="sessionsTitle">
+          <div class="section-heading"><div><h2 id="sessionsTitle">Customer sessions</h2><p>Latest Wi-Fi access activity.</p></div><span class="live-pill"><span class="online-dot"></span>Live data</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Package</th><th>Started</th><th>Expires</th><th>Status</th></tr></thead><tbody id="sessions"><tr><td colspan="5" class="table-message">Loading sessions...</td></tr></tbody></table></div>
+          <p class="table-note">Showing the latest 50 sessions.</p>
+        </section>
+      </section>
+      <section class="admin-view" id="revenuePage" data-page-view="revenue" hidden>
+        <section id="revenueSection" class="section-block card-section" aria-labelledby="revenueTitle">
+          <div class="section-heading"><div><h2 id="revenueTitle">Payments &amp; revenue</h2><p>Confirmed M-Pesa payments only.</p></div></div>
+          <div id="revenue" class="revenue-list"><p class="table-message">Loading revenue...</p></div>
+          <h3 class="subheading">Sales by package</h3>
+          <div id="breakdown" class="breakdown-list"><p class="table-message">Loading package sales...</p></div>
+        </section>
+      </section>
+      <section class="admin-view" id="routersPage" data-page-view="routers" hidden>
+        <section id="routersSection" class="section-block card-section" aria-labelledby="routersTitle">
+          <div class="section-heading section-heading-wrap">
+            <div><h2 id="routersTitle">Router inventory</h2><p>Manage access points connected behind the central MikroTik gateway.</p></div>
+            <button id="addRouter" class="button button-primary" type="button">Register device</button>
+          </div>
+          <p id="gatewayNotice" class="router-notice">Loading gateway status...</p>
+          <div class="table-wrap"><table><thead><tr><th>Device</th><th>Address</th><th>Connection</th><th>Operating mode</th><th>Gateway</th><th>Inventory</th><th>Verification</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="routers"><tr><td colspan="8" class="table-message">Loading router inventory...</td></tr></tbody></table></div>
+        </section>
+      </section>
+      <footer class="admin-footer">Tamu Express Wi-Fi <span>|</span> All times shown in East Africa Time</footer>
+    </main>
+  </div>
+
+  <dialog id="editor" class="editor-dialog">
+    <form id="form">
+      <div class="modal-title"><div><small>PACKAGE SETTINGS</small><h2 id="title">Add package</h2></div><button type="button" id="cancel" class="icon-button" aria-label="Close">X</button></div>
+      <input id="id" type="hidden">
+      <div class="form-grid">
+        <label class="field field-wide">Package name<input id="name" maxlength="80" autocomplete="off" placeholder="e.g. 2 Hours" required></label>
+        <label class="field">Price (KSh)<input id="price_kes" type="number" min="1" step="1" required></label>
+        <label class="field">Duration<input id="duration" type="number" min="1" step="1" required></label>
+        <label class="field field-wide">Duration unit<select id="unit"><option value="1">Minutes</option><option value="60" selected>Hours</option><option value="1440">Days</option></select></label>
+        <label class="field field-wide">Description<textarea id="description" rows="3" maxlength="240" placeholder="What customers receive with this plan" required></textarea></label>
+        <label class="field field-wide">Display order<input id="display_order" type="number" min="0" step="1" required><small>Lower numbers appear first in the customer portal.</small></label>
+      </div>
+      <fieldset class="package-options"><legend>Customer portal display</legend><label><input id="is_active" type="checkbox" checked><span><b>Available for sale</b><small>Customers can purchase this package.</small></span></label><label><input id="is_popular" type="checkbox"><span><b>Mark as popular</b><small>Show a popular label.</small></span></label><label><input id="is_best_value" type="checkbox"><span><b>Mark as best value</b><small>Highlight this package as best value.</small></span></label></fieldset>
+      <p id="error" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button id="cancelBottom" class="button button-quiet" type="button">Cancel</button><button id="savePackage" class="button button-primary" type="submit">Save package</button></div>
+    </form>
+  </dialog>
+  <dialog id="routerEditor" class="editor-dialog">
+    <form id="routerForm">
+      <div class="modal-title"><div><small>NETWORK DEVICE</small><h2 id="routerEditorTitle">Register router or access point</h2></div><button type="button" id="closeRouterEditor" class="icon-button" aria-label="Close">×</button></div>
+      <input id="routerId" type="hidden">
+      <div class="form-grid">
+        <label class="field field-wide">Device name<input id="routerName" maxlength="80" required></label>
+        <label class="field">MAC address<input id="routerMac" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" required></label>
+        <label class="field">IP address<input id="routerIp" maxlength="45" placeholder="192.168.88.2" required></label>
+        <label class="field">Connection type<select id="connectionType"><option value="ETHERNET">Ethernet</option><option value="ACCESS_POINT">Access point</option><option value="WIRELESS_BRIDGE">Wireless bridge</option><option value="WIRELESS_REPEATER">Wireless repeater</option></select></label>
+        <label class="field">Operating mode<select id="operatingMode"><option value="AP_BRIDGE">Access point / bridge</option><option value="WIRELESS_BRIDGE">Wireless client bridge</option><option value="REPEATER_BRIDGE">Repeater bridge</option></select></label>
+        <label class="field field-wide">Central gateway<select id="parentGateway" required></select></label>
+        <label class="field field-wide"><input id="routerEnabled" type="checkbox" checked> Enabled in inventory</label>
+      </div>
+      <p id="routerError" class="form-error" role="alert"></p>
+      <div class="modal-actions"><button id="cancelRouter" class="button button-quiet" type="button">Cancel</button><button id="saveRouter" class="button button-primary" type="submit">Register device</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+    import { getAuth, onIdTokenChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyCySxLRq-qLu1RqkdFip3eOabTgLgvjnes",
+      authDomain: "technch--hotspot.firebaseapp.com",
+      projectId: "technch--hotspot",
+      storageBucket: "technch--hotspot.firebasestorage.app",
+      messagingSenderId: "88167929325",
+      appId: "1:88167929325:web:adb3b385b47df6b94083e4",
+      measurementId: "G-G91DZQ7MJN"
+    };
+    const auth = getAuth(initializeApp(firebaseConfig));
+    window.TECHNCH_FIREBASE = { auth, onIdTokenChanged: callback => onIdTokenChanged(auth, callback), signInWithEmailAndPassword: (email, password) => signInWithEmailAndPassword(auth, email, password), signInWithCustomToken: token => signInWithCustomToken(auth, token), signOut: () => signOut(auth) };
+  </script>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

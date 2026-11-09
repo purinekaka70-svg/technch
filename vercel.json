@@ -1,0 +1,29 @@
+{
+    "crons":  [
+                  {
+                      "path":  "/api/cron/expire-sessions",
+                      "schedule":  "*/5 * * * *"
+                  }
+              ],
+    "builds":  [
+                   {
+                       "src":  "api/**/*.js",
+                       "use":  "@vercel/node"
+                   },
+                   {
+                       "src":  "**",
+                       "use":  "@vercel/static"
+                   }
+               ],
+    "routes":  [
+                   {
+                       "src":  "/api/(.*)",
+                       "dest":  "/api/$1"
+                   },
+                   {
+                       "src":  "/(.*)",
+                       "dest":  "/$1"
+                   }
+               ],
+    "version":  2
+}
