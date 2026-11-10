@@ -112,4 +112,4 @@ Paste that token into Vercel, redeploy, then in PowerShell from this repository 
 
 ## Expiry job
 
-`vercel.json` invokes `/api/cron/expire-sessions` every five minutes. Set a unique `CRON_SECRET`; openNDS enforces paid session timeouts locally. In TYRAX agent mode, the local agent also checks for expired sessions every eight seconds and blocks their MACs.
+On Vercel Hobby, `vercel.json` invokes `/api/cron/expire-sessions` once daily at 00:00 UTC. Set a unique `CRON_SECRET`; openNDS enforces paid session timeouts locally. In TYRAX agent mode, the local agent also checks for expired sessions every eight seconds and blocks their MACs. Upgrade to Vercel Pro if you need the hosted cleanup job to run more frequently.
