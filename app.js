@@ -66,7 +66,7 @@ if (connected) {
   const notice = document.createElement('p');
   notice.className = 'connection-success';
   notice.setAttribute('role', 'status');
-  notice.textContent = 'You are connected to Technch- Hotspot. You can now browse the internet.';
+  notice.textContent = 'You are connected to Jamii WiFi. You can now browse the internet.';
   document.querySelector('main')?.prepend(notice);
 }
 if (fas) {
@@ -183,7 +183,7 @@ async function restorePaidAccess(event) {
     return;
   }
   if (!mikrotikPortal) {
-    setPaymentStatus('Reopen this page from the Technch- HOTSPOT sign-in screen on the paid device, then choose Restore access.', false, true);
+    setPaymentStatus('Reopen this page from the Jamii WiFi sign-in screen on the paid device, then choose Restore access.', false, true);
     return;
   }
   payButton.disabled = true;
@@ -192,7 +192,7 @@ async function restorePaidAccess(event) {
   try {
     await portalReady;
     if (portalError) throw new Error(portalError);
-    if (!portalToken) throw new Error('Reconnect to Technch- HOTSPOT and reopen its sign-in page on this device.');
+  if (!portalToken) throw new Error('Reconnect to Jamii WiFi and reopen its sign-in page on this device.');
     const response = await fetchWithTimeout('/api/payments/recover-login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ portalToken, phone, receipt })
@@ -249,7 +249,7 @@ const handlePaymentSubmit = async event => {
   }
   await portalReady;
   if (portalError) { restorePayButton(portalError); return; }
-  if (!portalToken) { restorePayButton('Join Technch- Hotspot and open its sign-in page to buy access for this device.'); return; }
+  if (!portalToken) { restorePayButton('Join Jamii WiFi and open its sign-in page to buy access for this device.'); return; }
   paymentState = 'starting';
   payButton.textContent = 'Sending STK...';
   setPaymentStatus('Sending STK...', true);
@@ -331,7 +331,7 @@ const handlePaymentSubmit = async event => {
       if (state.status === 'SUCCESS' && state.session === 'GATEWAY_FAILED') {
         paymentConfirmed = true;
         if (Date.now() - lastActivationNotice >= 15000) {
-          setPaymentStatus('Payment is confirmed, but the hotspot has not granted access yet. Keep this page open and reconnect this device to Technch- Hotspot if needed. The agent will retry automatically; do not pay again.', true, true);
+          setPaymentStatus('Payment is confirmed, but the hotspot has not granted access yet. Keep this page open and reconnect this device to Jamii WiFi if needed. The agent will retry automatically; do not pay again.', true, true);
           lastActivationNotice = Date.now();
         }
         continue;
@@ -341,7 +341,7 @@ const handlePaymentSubmit = async event => {
         if (state.session === 'WAITING_GATEWAY') {
           const now = Date.now();
           if (now - lastActivationNotice >= 15000) {
-            setPaymentStatus('Payment confirmed. The hotspot agent is applying your access now. Keep this page open; if it takes more than a minute, reconnect to Technch- Hotspot and contact support with your M-Pesa receipt.', true);
+          setPaymentStatus('Payment confirmed. The hotspot agent is applying your access now. Keep this page open; if it takes more than a minute, reconnect to Jamii WiFi and contact support with your M-Pesa receipt.', true);
             lastActivationNotice = now;
           }
         } else {
@@ -395,6 +395,6 @@ document.querySelector('#restoreAccess')?.addEventListener('click', () => {
   document.querySelector('#modalReceiptLabel').hidden = false;
   payButton.disabled = false;
   payButton.textContent = 'Restore access';
-  setPaymentStatus(mikrotikPortal ? 'Restore the payment made for this connected device; no new charge will be started.' : 'Open this page from the Technch- HOTSPOT sign-in screen on the paid device first.');
+  setPaymentStatus(mikrotikPortal ? 'Restore the payment made for this connected device; no new charge will be started.' : 'Open this page from the Jamii WiFi sign-in screen on the paid device first.');
   modal.showModal();
 });
