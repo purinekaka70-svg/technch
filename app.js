@@ -398,3 +398,18 @@ document.querySelector('#restoreAccess')?.addEventListener('click', () => {
   setPaymentStatus(mikrotikPortal ? 'Restore the payment made for this connected device; no new charge will be started.' : 'Open this page from the Jamii WiFi sign-in screen on the paid device first.');
   modal.showModal();
 });
+const supportPhone = '0114 562309';
+const supportDigits = '254114562309';
+const supportLink = document.querySelector('.whatsapp-support');
+const callLink = document.querySelector('.support-call');
+if (supportLink) {
+  supportLink.href = `https://wa.me/${supportDigits}?text=Hello%2C%20I%20need%20help%20with%20Jamii%20WiFi.`;
+  supportLink.setAttribute('aria-label', `Chat with Jamii WiFi support on WhatsApp at ${supportPhone}`);
+  const phoneText = supportLink.querySelector('span');
+  if (phoneText) phoneText.textContent = supportPhone;
+}
+if (callLink) {
+  callLink.href = `tel:+${supportDigits}`;
+  callLink.setAttribute('aria-label', `Call Jamii WiFi support at ${supportPhone}`);
+  callLink.lastChild.textContent = `Call support: ${supportPhone}`;
+}

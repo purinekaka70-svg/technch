@@ -22,7 +22,8 @@ const handlers = {
 };
 
 export default async function handler(req, res) {
-  const pathname = new URL(req.url, 'http://localhost').pathname.replace(/\/$/, '') || '/';
+  const requestUrl = new URL(req.url, 'http://localhost');
+  const pathname = requestUrl.searchParams.get('path') || requestUrl.pathname;
   const modulePath = handlers[pathname];
   if (!modulePath) return res.status(404).json({ error: 'Not found' });
   const module = await import(modulePath);

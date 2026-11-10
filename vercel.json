@@ -7,7 +7,7 @@
               ],
     "builds":  [
                    {
-                       "src":  "api/index.js",
+                       "src":  "api/[...path].js",
                        "use":  "@vercel/node"
                    },
                    {
@@ -18,7 +18,7 @@
     "routes":  [
                    {
                        "src":  "/api/(.*)",
-                       "dest":  "/api/index"
+                       "dest":  "/api/$1"
                    },
                    {
                        "src":  "/(.*)",
