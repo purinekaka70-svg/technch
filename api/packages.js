@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     if (req.headers.authorization && !admin) return;
     const { data, error } = await db.from('wifi_packages').select('*').order('display_order');
     if (error) return res.status(503).json({ error: 'The Firestore package catalogue is unavailable.' });
+    if (!admin) res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
     return res.status(200).json(admin ? data : data.filter(item => item.is_active));
   }
   if (!await requireAdmin(req, res)) return;
