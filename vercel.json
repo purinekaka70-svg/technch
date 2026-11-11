@@ -1,9 +1,17 @@
 {
-  "outputDirectory": "public",
+  "version": 2,
   "crons": [
     {
       "path": "/api/cron/expire-sessions",
       "schedule": "0 0 * * *"
     }
+  ],
+  "builds": [
+    { "src": "api/[...path].js", "use": "@vercel/node" },
+    { "src": "**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/[...path]?path=/api/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
   ]
 }

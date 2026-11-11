@@ -9,7 +9,7 @@
                             "vercel":  "^65.11.0"
                         },
     "scripts":  {
-    "build":  "node --check admin.js && node tools/build-public.mjs",
+    "build":  "node --check admin.js",
                     "test":  "node --test tests/*.test.js"
                 }
 }
