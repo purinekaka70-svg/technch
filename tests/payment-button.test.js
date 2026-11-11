@@ -12,18 +12,20 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
     classList: { toggle() {} },
     setAttribute(name, value) { this.attributes[name] = value; },
     addEventListener(name, callback) { listeners.set(this.id || name, callback); },
-    scrollIntoView() {}, focus() {}
+    scrollIntoView() {}, focus() {}, closest() { return { firstChild: { textContent: '' } }; }
   });
   const grid = { replaceChildren() { cards.length = 0; }, append(card) { cards.push(card); }, innerHTML: '' };
   const modal = { showModal() {}, close() {} };
   const elements = new Map([
     ['#planGrid', grid], ['#purchaseModal', modal], ['#modalName', makeElement()],
+    ['#modalReceiptLabel', makeElement()], ['.choice', Object.assign(makeElement(), { firstChild: { textContent: '' } })],
     ['#modalPrice', makeElement()], ['#modalDescription', makeElement()], ['#modalPhone', makeElement()],
     ['#modalPay', Object.assign(makeElement(), { id: 'modalPay' })],
     ['#modalStatus', makeElement()], ['#modalStatusText', makeElement()],
     ['#paymentForm', Object.assign(makeElement(), { id: 'paymentForm' })], ['.close', makeElement()]
   ]);
   const requests = [];
+  let testNow = 0;
   const document = {
     querySelector(selector) { return elements.get(selector) || null; },
     querySelectorAll(selector) { return selector === '.plan' ? cards : []; },
@@ -44,7 +46,7 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
 
   runInNewContext(source, {
     document, fetch, location: { search: '?gateway=mikrotik&clientmac=aa:bb:cc:dd:ee:ff&clientip=192.0.2.1', origin: 'https://example.test', pathname: '/' },
-    history: { replaceState() {} }, URLSearchParams, Date, setTimeout: (callback, delay) => setTimeout(callback, delay === 3000 ? 0 : delay), clearTimeout, AbortController,
+    history: { replaceState() {} }, URLSearchParams, Date: { now: () => (testNow += 60_000) }, setTimeout: (callback, delay) => setTimeout(callback, delay === 3000 ? 0 : delay), clearTimeout, AbortController,
     encodeURIComponent, console
   });
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -66,6 +68,6 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
   assert.equal(payRequest.options.method, 'POST');
   assert.deepEqual(JSON.parse(payRequest.options.body), { packageId: 'package-10', phone: '254115613332', portalToken: 'a'.repeat(64), packageName: '1 Hour' });
   assert.match(elements.get('#modalStatusText').textContent, /Check your phone for STK Push - Enter PIN|still being confirmed/);
-  assert.equal(elements.get('#modalPay').textContent, 'Payment in progress');
+  assert.equal(elements.get('#modalPay').textContent, 'Payment submitted');
   assert.equal(elements.get('#modalPay').disabled, true);
 });

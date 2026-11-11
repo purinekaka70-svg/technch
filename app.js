@@ -158,7 +158,7 @@ async function loadPackages() {
   try {
     let response;
     for (let attempt = 0; attempt < 2; attempt++) {
-      response = await fetchWithTimeout('/api/packages.js', { headers: { Accept: 'application/json' } }, 10000);
+      response = await fetchWithTimeout('/api/packages', { headers: { Accept: 'application/json' } }, 10000);
       if (response.status !== 429 || attempt === 1) break;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
