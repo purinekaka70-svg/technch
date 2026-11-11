@@ -1,5 +1,5 @@
 {
-  "outputDirectory": ".",
+  "outputDirectory": "public",
   "crons": [
     {
       "path": "/api/cron/expire-sessions",
