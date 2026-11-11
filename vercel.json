@@ -1,31 +1,9 @@
 {
-  "version": 2,
+  "outputDirectory": "public",
   "crons": [
     {
       "path": "/api/cron/expire-sessions",
       "schedule": "0 0 * * *"
     }
-  ],
-  "builds": [
-    { "src": "api/*.js", "use": "@vercel/node" },
-    { "src": "api/admin/*.js", "use": "@vercel/node" },
-    { "src": "api/cloudpay/*.js", "use": "@vercel/node" },
-    { "src": "api/cron/*.js", "use": "@vercel/node" },
-    { "src": "api/mikrotik/*.js", "use": "@vercel/node" },
-    { "src": "api/mikrotik-agent/*.js", "use": "@vercel/node" },
-    { "src": "api/mpesa/*.js", "use": "@vercel/node" },
-    { "src": "api/opennds/*.js", "use": "@vercel/node" },
-    { "src": "api/payments/*.js", "use": "@vercel/node" },
-    { "src": "api/tyrax-agent/*.js", "use": "@vercel/node" },
-    { "src": "*.html", "use": "@vercel/static" },
-    { "src": "*.js", "use": "@vercel/static" },
-    { "src": "*.css", "use": "@vercel/static" },
-    { "src": "*.webmanifest", "use": "@vercel/static" },
-    { "src": "assets/*", "use": "@vercel/static" },
-    { "src": "mikrotik/hotspot/*.html", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/$1" }
   ]
 }
