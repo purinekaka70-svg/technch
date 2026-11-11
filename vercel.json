@@ -8,9 +8,11 @@
   ],
   "builds": [
     { "src": "api/[...path].js", "use": "@vercel/node" },
+    { "src": "api/cloudpay/webhook.js", "use": "@vercel/node" },
     { "src": "**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/api/cloudpay/webhook", "dest": "/api/cloudpay/webhook" },
     { "src": "/api/(.*)", "dest": "/api/[...path].js?path=/api/$1" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
