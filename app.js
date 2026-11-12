@@ -73,24 +73,20 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 }
 
 async function requestPortalContext(endpoint, body) {
-  let lastError;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await fetchWithTimeout(endpoint, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-      }, 10000);
-      const result = await response.json().catch(() => ({}));
-      if (response.ok && result.portalToken) return result.portalToken;
-      const error = new Error(result.error || 'The hotspot could not verify this device.');
-      if (response.status < 500 && response.status !== 429) throw error;
-      lastError = error;
-    } catch (error) {
-      lastError = error;
-    }
-    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 300));
+  // Do one bounded attempt here. The caller already retries when the customer
+  // taps Pay, so an automatic second request only makes a slow captive session
+  // wait twice before the customer can act.
+  try {
+    const response = await fetchWithTimeout(endpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }, 8000);
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.portalToken) return result.portalToken;
+    throw new Error(result.error || 'The hotspot could not verify this device.');
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Hotspot check timed out. Check the Wi-Fi connection, then tap Pay to retry.');
+    throw error || new Error('The hotspot could not verify this device. Tap Pay to retry.');
   }
-  if (lastError?.name === 'AbortError') throw new Error('Hotspot check timed out. Tap Pay again to retry the device check.');
-  throw lastError || new Error('The hotspot could not verify this device. Tap Pay again to retry.');
 }
 
 function normalizeKenyanPhone(value) {
