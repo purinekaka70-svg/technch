@@ -4,7 +4,10 @@ import { isMikrotikAgentMode, isTyraxAgentMode, queueMikrotikRouterCommand, queu
 export default async function handler(req, res) {
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).end();
   const db = firebaseDb(), now = new Date().toISOString();
-  const { data: sessions, error } = await db.from('wifi_sessions').select('id,session_status').in('session_status', ['ACTIVE','WAITING_GATEWAY']).lte('expiry_time', now);
+  // MikroTik queued sessions have no expiry until the local agent applies the
+  // grant. Do not cancel a paid ALLOW command just because the agent is offline.
+  const expiringStates = isMikrotikAgentMode() ? ['ACTIVE'] : ['ACTIVE','WAITING_GATEWAY'];
+  const { data: sessions, error } = await db.from('wifi_sessions').select('id,session_status').in('session_status', expiringStates).lte('expiry_time', now);
   if (error) return res.status(500).json({ error: error.message });
   if (isTyraxAgentMode()) {
     for (const session of sessions) {
@@ -30,7 +33,7 @@ export default async function handler(req, res) {
       await db.from('mikrotik_router_commands').update({ status: 'CANCELLED', last_error: 'Session expired before device authorization' }).eq('session_id', session.id).eq('action', 'ALLOW').eq('status', 'PENDING');
       await db.from('wifi_sessions').update({ session_status: 'EXPIRED' }).eq('id', session.id).in('session_status', ['ACTIVE','WAITING_GATEWAY']);
     }
-    const { data: stuck } = await db.from('wifi_sessions').select('id,payment_id').eq('session_status', 'GATEWAY_FAILED').gt('expiry_time', now).limit(50);
+    const { data: stuck } = await db.from('wifi_sessions').select('id,payment_id').eq('session_status', 'GATEWAY_FAILED').limit(50);
     let retried = 0;
     for (const session of stuck || []) {
       const { data: payment } = await db.from('payments').select('mikrotik_portal_context_id,wifi_packages(duration_minutes)').eq('id', session.payment_id).maybeSingle();

@@ -1,5 +1,5 @@
 import { firebaseDb } from '../../lib/firebase-db.js';
-import { isGatewayConfigured, isMikrotikAgentMode, isMikrotikAgentOnline, isTyraxAgentMode, mikrotikGatewayId } from '../../lib/gateway.js';
+import { isGatewayConfigured, isMikrotikAgentMode, isTyraxAgentMode, mikrotikGatewayId } from '../../lib/gateway.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -10,7 +10,6 @@ export default async function handler(req, res) {
   const { packageId, phone, portalToken } = req.body || {};
   if (!isGatewayConfigured()) return res.status(503).json({ error: 'Wi-Fi access activation is not configured for this router yet. Please contact the Wi-Fi administrator.' });
   if (isTyraxAgentMode()) return res.status(503).json({ error: 'Phone-only device identification requires the openNDS captive portal. The TYRAX router agent cannot identify a device from a phone number.' });
-  if (isMikrotikAgentMode() && !(await isMikrotikAgentOnline())) return res.status(503).json({ error: 'The MikroTik access agent is offline. Please try again later.' });
   if (!/^[a-f0-9]{64}$/.test(portalToken || '')) return res.status(400).json({ error: 'Join the hotspot and open its captive portal before purchasing. The connected device is identified automatically.' });
   if (!/^(?:254(?:1|7)\d{8})$/.test(kenyaPhone(phone))) return res.status(400).json({ error: 'Enter a valid Kenyan M-Pesa phone number' });
   if (!packageId) return res.status(400).json({ error: 'Select an available Wi-Fi package' });

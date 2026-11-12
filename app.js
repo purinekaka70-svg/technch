@@ -149,7 +149,9 @@ function openPackage(item) {
   } else if (paymentState === 'idle') {
     payButton.disabled = false;
     payButton.textContent = `Pay ${fmt(item.price_kes)}`;
-    setPaymentStatus('Enter your M-Pesa PIN only in the official prompt on your phone. Never share it here.');
+    setPaymentStatus(mikrotikPortal
+      ? 'If the hotspot agent is offline, confirmed payment will stay queued until it reconnects. Do not pay twice.'
+      : 'Enter your M-Pesa PIN only in the official prompt on your phone. Never share it here.');
   } else {
     payButton.disabled = !['idle', 'failed'].includes(paymentState);
     payButton.textContent = paymentState === 'failed' ? `Try again · ${fmt(item.price_kes)}` : paymentState === 'pending' || paymentState === 'starting' ? 'Payment in progress' : paymentState === 'confirmed' ? 'Payment confirmed' : 'Check payment status';
@@ -404,7 +406,7 @@ const handlePaymentSubmit = async event => {
         if (state.session === 'WAITING_GATEWAY') {
           const now = Date.now();
           if (now - lastActivationNotice >= 15000) {
-          setPaymentStatus('Payment confirmed. The hotspot agent is applying your access now. Keep this page open; if it takes more than a minute, reconnect to Jamii WiFi and contact support with your M-Pesa receipt.', true);
+          setPaymentStatus('Payment confirmed. Your Wi-Fi access is queued and will activate when the hotspot agent reconnects. Keep your M-Pesa receipt; do not pay again.', true);
             lastActivationNotice = now;
           }
         } else {
@@ -416,7 +418,7 @@ const handlePaymentSubmit = async event => {
       paymentState = paymentConfirmed ? 'activation_pending' : 'timeout';
       payButton.textContent = paymentConfirmed ? 'Payment received' : 'Payment submitted';
       setPaymentStatus(paymentConfirmed
-        ? 'Payment was confirmed, but the hotspot has not acknowledged access yet. Keep the M-Pesa receipt and contact support; do not pay again.'
+        ? 'Payment confirmed. Your Wi-Fi access is still queued for the hotspot agent. Keep your M-Pesa receipt; do not pay again.'
         : 'This payment is still being confirmed. Do not submit another payment. If Wi-Fi does not activate, contact support with your M-Pesa message.', false, true);
     }
   } catch (error) {
