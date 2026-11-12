@@ -8,13 +8,13 @@ Responsive customer portal and serverless Wi-Fi billing application for Vercel. 
 2. In Firebase Console, enable Email/Password under Authentication, create your admin user, and add the deployed domain to Authorized domains. Create the default Firestore database in Native mode.
 3. Create a Firebase service account and configure `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` in Vercel. The web app configuration is embedded in `/admin.html`; keep the service-account private key server-side. Set the Firebase `admin: true` custom claim for your admin UID by running `FIREBASE_ADMIN_UID=<uid> node tools/grant-firebase-admin.mjs` from a trusted computer with the service-account environment configured. Protected API routes verify this claim.
 4. Deploy Firestore rules with `firebase deploy --only firestore:rules`, then run `node tools/seed-firestore-packages.mjs` once to add the starter plans. Package changes made in admin are stored in Firestore. Packages with payment or session history cannot be deleted; disable them to preserve records.
-5. Deploy this folder as a new Vercel project. Replace the example `technch-hotspot.vercel.app` URL in the MikroTik pages and local agent defaults with your actual deployment URL before configuring the router.
+5. Deploy this folder to the `technch-yey9` Vercel project. Its production URL is `https://technch-yey9.vercel.app/`.
 
 The admin portal is installable as a PWA from `/admin.html`. After signing in, use **Install app** in the left navigation. Dashboard API responses are never cached by the service worker; the app shell is cached so the admin page can open offline, while live management data still requires internet access.
 
 ## M-Pesa billing
 
-Configure CloudPay in Vercel with `CLOUDPAY_CONSUMER_KEY`, `CLOUDPAY_CONSUMER_SECRET`, `CLOUDPAY_WEBHOOK_SECRET`, and an explicit `CLOUDPAY_ENV`. Use `sandbox` only with CloudPay sandbox credentials for test transactions; set `production` with production credentials for live payments. CloudPay OAuth and payment API calls use `https://www.pay.cloud.or.ke/api` for production and `https://www.pay.cloud.or.ke/sandbox/api` for sandbox. The API fails closed if the environment is unset or invalid instead of silently using the sandbox. In the CloudPay dashboard, set the payment webhook URL to `https://technch-hotspot.vercel.app/api/cloudpay/webhook` and copy its signing secret into `CLOUDPAY_WEBHOOK_SECRET`. The browser does not decide price or payment state; only a valid signed CloudPay completion event for the exact amount starts a paid session. The legacy unsigned `/api/mpesa/callback` endpoint is retired; use only `/api/cloudpay/webhook`.
+Configure CloudPay in Vercel with `CLOUDPAY_CONSUMER_KEY`, `CLOUDPAY_CONSUMER_SECRET`, `CLOUDPAY_WEBHOOK_SECRET`, and an explicit `CLOUDPAY_ENV`. Use `sandbox` only with CloudPay sandbox credentials for test transactions; set `production` with production credentials for live payments. CloudPay OAuth and payment API calls use `https://www.pay.cloud.or.ke/api` for production and `https://www.pay.cloud.or.ke/sandbox/api` for sandbox. The API fails closed if the environment is unset or invalid instead of silently using the sandbox. In the CloudPay dashboard, set the payment webhook URL to `https://technch-yey9.vercel.app/api/cloudpay/webhook` and copy its signing secret into `CLOUDPAY_WEBHOOK_SECRET`. The browser does not decide price or payment state; only a valid signed CloudPay completion event for the exact amount starts a paid session. The legacy unsigned `/api/mpesa/callback` endpoint is retired; use only `/api/cloudpay/webhook`.
 
 ## Airtel 5G router captive portal
 
@@ -26,7 +26,7 @@ The Network Settings screenshot confirms the router's LAN admin address is `192.
 
 This is the supported path if you buy/use a MikroTik: Airtel LAN connects to the MikroTik WAN; the Tenda runs in AP/bridge mode with its DHCP server disabled and connects to a guest-side MikroTik LAN/bridge; guests join the Tenda's Technch- HOTSPOT SSID. Set the Tenda's wireless network name (SSID) to exactly Technch- HOTSPOT in its Wi-Fi settings. Airtel Wi-Fi must stay private for staff. Guest traffic must pass through the MikroTik HotSpot.
 
-The MikroTik portal redirect pages are provided in `mikrotik/hotspot/login.html` and `mikrotik/hotspot/rlogin.html`. Update the portal base URL in both files to your actual deployment domain, then upload them to the active HotSpot HTML directory as `login.html` and `rlogin.html`. RouterOS serves `rlogin.html` when it intercepts an unauthenticated request to an external website; `login.html` serves the router's `/login` route. Both pages forward RouterOS's `$(mac)` and `$(ip)` values to the Vercel portal; checkout never asks the customer to type a MAC. Add `technch-hotspot.vercel.app` to the MikroTik HotSpot walled garden so the portal can load before authentication. Configure HotSpot login-by `http-pap`; the app's local agent creates a temporary RouterOS HotSpot user locked to the originating MAC and paid duration, and the customer's browser submits that one-time login after CloudPay confirms payment. Keep RouterOS management reachable only on the trusted LAN. Use RouterOS v7 REST over trusted HTTPS if available; if using HTTP, isolate it to the wired/trusted LAN and restrict it to the agent PC's IP.
+The MikroTik portal redirect pages are provided in `mikrotik/hotspot/login.html` and `mikrotik/hotspot/rlogin.html`. They target `technch-yey9.vercel.app`; upload them to the active HotSpot HTML directory as `login.html` and `rlogin.html`. RouterOS serves `rlogin.html` when it intercepts an unauthenticated request to an external website; `login.html` serves the router's `/login` route. Both pages forward RouterOS's `$(mac)` and `$(ip)` values to the Vercel portal; checkout never asks the customer to type a MAC. Add `technch-yey9.vercel.app` to the MikroTik HotSpot walled garden so the portal can load before authentication. Configure HotSpot login-by `http-pap`; the app's local agent creates a temporary RouterOS HotSpot user locked to the originating MAC and paid duration, and the customer's browser submits that one-time login after CloudPay confirms payment. Keep RouterOS management reachable only on the trusted LAN. Use RouterOS v7 REST over trusted HTTPS if available; if using HTTP, isolate it to the wired/trusted LAN and restrict it to the agent PC's IP.
 
 In Vercel set:
 
@@ -35,7 +35,7 @@ In Vercel set:
 * `MIKROTIK_AGENT_TOKEN` to a random 32-byte token
 * `MIKROTIK_CREDENTIAL_SECRET` to a separate random secret of at least 32 bytes
 * `MIKROTIK_HOTSPOT_LOGIN_URL` to the private RouterOS HotSpot login URL, for example `http://192.168.88.1/login`
-* The CloudPay values listed above, including the signed callback at `https://technch-hotspot.vercel.app/api/cloudpay/webhook`
+* The CloudPay values listed above, including the signed callback at `https://technch-yey9.vercel.app/api/cloudpay/webhook`
 
 Configure the MikroTik environment variables in Vercel. Router records and agent heartbeats are stored in Firestore; no database migrations are required. On the always-on Windows PC connected to the MikroTik's trusted LAN, run PowerShell from this repository:
 
@@ -87,7 +87,7 @@ For the openNDS option, configure these Vercel environment variables and redeplo
 
 * `OPENNDS_GATEWAY_NAME`: exact `gatewayname` configured in openNDS.
 * `OPENNDS_FAS_KEY`: long random secret, shared only between Vercel and openNDS.
-* `OPENNDS_FAS_URL=https://technch-hotspot.vercel.app/api/opennds/fas`.
+* `OPENNDS_FAS_URL=https://technch-yey9.vercel.app/api/opennds/fas`.
 
 Configure openNDS for secure level 4, port 443, and path `/api/opennds/fas`, with the same gateway name and FAS key. The guest SSID must be broadcast by this openNDS gateway. Keep its WAN connected to Airtel LAN; don't expose guest access through the Airtel Wi-Fi. Do not put the FAS key in the browser or commit it.
 

@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$AgentToken,
   [string]$RouterUrl = 'http://192.168.1.1',
-  [string]$ApiUrl = 'https://technch-hotspot.vercel.app/api/tyrax-agent/commands'
+  [string]$ApiUrl = 'https://technch-yey9.vercel.app/api/tyrax-agent/commands'
 )
 
 $ErrorActionPreference = 'Stop'

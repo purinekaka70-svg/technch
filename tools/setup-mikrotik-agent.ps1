@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)] [string]$AgentToken,
   [Parameter(Mandatory = $true)] [string]$RouterUrl,
-  [string]$ApiUrl = 'https://technch-hotspot.vercel.app/api/mikrotik-agent/commands'
+  [string]$ApiUrl = 'https://technch-yey9.vercel.app/api/mikrotik-agent/commands'
 )
 
 $ErrorActionPreference = 'Stop'

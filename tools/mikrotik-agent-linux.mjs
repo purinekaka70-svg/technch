@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const configPath = process.env.JIXELS_AGENT_CONFIG || '/etc/technch-mikrotik-agent/config.json';
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-const apiUrl = config.apiUrl || 'https://technch-hotspot.vercel.app/api/mikrotik-agent/commands';
+const apiUrl = config.apiUrl || 'https://technch-yey9.vercel.app/api/mikrotik-agent/commands';
 const routerRoot = `${String(config.routerUrl).replace(/\/+$/, '')}/rest`;
 const apiHeaders = { Authorization: `Bearer ${config.agentToken}` };
 const routerAuth = Buffer.from(`${config.routerUsername}:${config.routerPassword}`).toString('base64');

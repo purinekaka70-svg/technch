@@ -16,7 +16,7 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 service_user="technch-agent"
 install_dir="/opt/technch-mikrotik-agent"
 config_dir="/etc/technch-mikrotik-agent"
-api_default="https://technch-hotspot.vercel.app/api/mikrotik-agent/commands"
+api_default="https://technch-yey9.vercel.app/api/mikrotik-agent/commands"
 
 if ! id "$service_user" >/dev/null 2>&1; then
   useradd --system --home-dir "$install_dir" --shell /usr/sbin/nologin "$service_user"
