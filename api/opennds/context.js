@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (!isOpenNdsMode() || !isGatewayConfigured()) return res.status(503).json({ error: 'openNDS gateway is not configured' });
   try {
     const context = parseFas(req.body?.fas), token = randomBytes(32).toString('hex');
-    const { error } = await firebaseDb().from('opennds_portal_contexts').insert({ token_hash: createHash('sha256').update(token).digest('hex'), ...context, expires_at: new Date(Date.now() + 30 * 60_000).toISOString() });
+    const { error } = await firebaseDb().from('opennds_portal_contexts').insert({ token_hash: createHash('sha256').update(token).digest('hex'), ...context, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(), consumed_at: null });
     if (error) throw error;
     return res.status(200).json({ portalToken: token });
   } catch (error) { return res.status(400).json({ error: error.message || 'Invalid hotspot session' }); }

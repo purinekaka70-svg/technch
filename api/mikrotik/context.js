@@ -23,7 +23,8 @@ export default async function handler(req, res) {
   const gatewayId = mikrotikGatewayId();
   const { error } = await firebaseDb().from('mikrotik_portal_contexts').insert({
     token_hash: createHash('sha256').update(portalToken).digest('hex'), gateway_id: gatewayId,
-    mac_address: macAddress, client_ip: clientIp, expires_at: new Date(Date.now() + 30 * 60_000).toISOString()
+    mac_address: macAddress, client_ip: clientIp, expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+    consumed_at: null
   });
   if (error) {
     console.error('MikroTik portal context insert failed', { code: error.code, message: error.message, gatewayId });

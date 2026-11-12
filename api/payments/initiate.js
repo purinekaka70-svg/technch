@@ -1,6 +1,7 @@
 import { firebaseDb } from '../../lib/firebase-db.js';
 import { isGatewayConfigured, isMikrotikAgentMode, isTyraxAgentMode, mikrotikGatewayId } from '../../lib/gateway.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
+import { isPortalContextUsable } from '../../lib/portal-context.js';
 import { createHash, randomBytes } from 'node:crypto';
 
 const kenyaPhone = phone => String(phone || '').replace(/\D/g, '').replace(/^0/, '254');
@@ -17,13 +18,16 @@ export default async function handler(req, res) {
   const db = firebaseDb();
   const tokenHash = createHash('sha256').update(portalToken).digest('hex');
   const contextTable = isMikrotikAgentMode() ? 'mikrotik_portal_contexts' : 'opennds_portal_contexts';
-  const contextFields = isMikrotikAgentMode() ? 'id,mac_address,client_ip,gateway_id' : 'id,mac_address';
-  const { data: context, error: contextError } = await db.from(contextTable).select(contextFields).eq('token_hash', tokenHash).gt('expires_at', new Date().toISOString()).is('consumed_at', null).maybeSingle();
+  const contextFields = isMikrotikAgentMode() ? 'id,mac_address,client_ip,gateway_id,consumed_at' : 'id,mac_address,consumed_at';
+  const { data: context, error: contextError } = await db.from(contextTable).select(contextFields).eq('token_hash', tokenHash).gt('expires_at', new Date().toISOString()).maybeSingle();
   if (contextError) {
     console.error('Portal context lookup failed', { code: contextError.code, message: contextError.message });
     return res.status(503).json({ error: 'Hotspot session could not be verified. Please reconnect and try again.' });
   }
-  if (!context) return res.status(400).json({ error: 'Hotspot session expired. Reconnect to the Wi-Fi and try again.' });
+  // Firestore distinguishes a missing field from an explicit null. Older
+  // portal records may omit consumed_at, so check consumption in JS instead
+  // of filtering with Firestore's exact-null query.
+  if (!isPortalContextUsable(context)) return res.status(400).json({ error: 'Hotspot session expired or already used. Reopen the Wi-Fi portal and try again.' });
   if (isMikrotikAgentMode()) {
     const gatewayId = mikrotikGatewayId();
     if (!gatewayId || context.gateway_id !== gatewayId) {

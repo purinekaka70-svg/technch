@@ -79,12 +79,12 @@ async function requestPortalContext(endpoint, body) {
   try {
     const response = await fetchWithTimeout(endpoint, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }, 8000);
+    }, 15000);
     const result = await response.json().catch(() => ({}));
     if (response.ok && result.portalToken) return result.portalToken;
     throw new Error(result.error || 'The hotspot could not verify this device.');
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('Hotspot check timed out. Check the Wi-Fi connection, then tap Pay to retry.');
+    if (error?.name === 'AbortError') throw new Error('Hotspot check timed out. Confirm Wi-Fi is connected, then tap Pay to retry.');
     throw error || new Error('The hotspot could not verify this device. Tap Pay to retry.');
   }
 }
