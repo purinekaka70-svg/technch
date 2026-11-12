@@ -25,6 +25,8 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
     ['#paymentForm', Object.assign(makeElement(), { id: 'paymentForm' })], ['.close', makeElement()]
   ]);
   const requests = [];
+  let packageAttempts = 0;
+  let contextAttempts = 0;
   let testNow = 0;
   const document = {
     querySelector(selector) { return elements.get(selector) || null; },
@@ -37,8 +39,16 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
   };
   const fetch = async (url, options = {}) => {
     requests.push({ url: String(url), options });
-    if (url === '/api/packages') return { ok: true, json: async () => [{ id: 'package-10', name: '1 Hour', price_kes: 10, duration_minutes: 60 }] };
-    if (url === '/api/mikrotik/context') return { ok: true, json: async () => ({ portalToken: 'a'.repeat(64) }) };
+    if (url === '/api/packages') {
+      packageAttempts++;
+      if (packageAttempts === 1) return { ok: false, status: 503, json: async () => ({}) };
+      return { ok: true, json: async () => [{ id: 'package-10', name: '1 Hour', price_kes: 10, duration_minutes: 60 }] };
+    }
+    if (url === '/api/mikrotik/context') {
+      contextAttempts++;
+      if (contextAttempts === 1) return { ok: false, status: 503, json: async () => ({ error: 'temporary failure' }) };
+      return { ok: true, json: async () => ({ portalToken: 'a'.repeat(64) }) };
+    }
     if (url === '/api/pay') return { ok: true, status: 202, json: async () => ({ success: true, checkoutRequestId: 'checkout-1', statusToken: 'b'.repeat(64) }) };
     if (String(url).startsWith('/api/payments/status')) return { ok: true, json: async () => ({ status: 'PENDING' }) };
     throw new Error(`Unexpected request: ${url}`);
@@ -49,7 +59,7 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
     history: { replaceState() {} }, URLSearchParams, Date: { now: () => (testNow += 60_000) }, setTimeout: (callback, delay) => setTimeout(callback, delay === 3000 ? 0 : delay), clearTimeout, AbortController,
     encodeURIComponent, console
   });
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setTimeout(resolve, 350));
 
   assert.equal(cards.length, 1);
   cards[0].onclick();
@@ -64,6 +74,8 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
   await pending;
 
   assert.deepEqual(new Set(requests.map(request => request.url)), new Set(['/api/packages', '/api/mikrotik/context', '/api/pay', `/api/payments/status?token=${'b'.repeat(64)}`]));
+  assert.equal(packageAttempts, 2, 'package fetch retries a transient server failure');
+  assert.equal(contextAttempts, 2, 'hotspot verification retries a transient server failure');
   const payRequest = requests.find(request => request.url === '/api/pay');
   assert.equal(payRequest.options.method, 'POST');
   assert.deepEqual(JSON.parse(payRequest.options.body), { packageId: 'package-10', phone: '254115613332', portalToken: 'a'.repeat(64), packageName: '1 Hour' });

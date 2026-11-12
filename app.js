@@ -6,6 +6,18 @@ let selected, portalToken = null, portalError = null, portalReady = Promise.reso
 let paymentState = 'idle';
 let hotspotLoginAttempt = null;
 let recoveryMode = false;
+const packageCacheKey = 'technchPackageCatalogue';
+
+function readPackageCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(packageCacheKey) || 'null');
+    return Array.isArray(cached?.packages) && Date.now() - cached.savedAt < 24 * 60 * 60_000 ? cached.packages : null;
+  } catch { return null; }
+}
+
+function writePackageCache(packages) {
+  try { localStorage.setItem(packageCacheKey, JSON.stringify({ savedAt: Date.now(), packages })); } catch { /* private browsing may disable storage */ }
+}
 
 function submitHotspotLogin() {
   if (!hotspotLoginAttempt) return;
@@ -48,6 +60,27 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
+async function requestPortalContext(endpoint, body) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetchWithTimeout(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      }, 10000);
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.portalToken) return result.portalToken;
+      const error = new Error(result.error || 'The hotspot could not verify this device.');
+      if (response.status < 500 && response.status !== 429) throw error;
+      lastError = error;
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  if (lastError?.name === 'AbortError') throw new Error('Hotspot check timed out. Tap Pay again to retry the device check.');
+  throw lastError || new Error('The hotspot could not verify this device. Tap Pay again to retry.');
+}
+
 function normalizeKenyanPhone(value) {
   const digits = String(value || '').replace(/\D/g, '');
   if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`;
@@ -71,22 +104,14 @@ if (connected) {
 }
 if (fas) {
   history.replaceState({}, '', location.pathname);
-  portalReady = fetchWithTimeout('/api/opennds/context', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fas }) })
-    .then(async response => {
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Hotspot session could not be verified.');
-      portalToken = result.portalToken;
-    })
-    .catch(error => { portalError = error.name === 'AbortError' ? 'The hotspot check timed out. Reopen the captive portal and try again.' : error.message; });
+  portalReady = requestPortalContext('/api/opennds/context', { fas })
+    .then(value => { portalToken = value; portalError = null; })
+    .catch(error => { portalError = error.message; });
 } else if (mikrotikPortal) {
   history.replaceState({}, '', location.pathname);
-  portalReady = fetchWithTimeout('/api/mikrotik/context', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientMac, clientIp }) })
-    .then(async response => {
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'The MikroTik hotspot could not verify this device.');
-      portalToken = result.portalToken;
-    })
-    .catch(error => { portalError = error.name === 'AbortError' ? 'The hotspot check timed out. Reopen the captive portal and try again.' : error.message; });
+  portalReady = requestPortalContext('/api/mikrotik/context', { clientMac, clientIp })
+    .then(value => { portalToken = value; portalError = null; })
+    .catch(error => { portalError = error.message; });
 }
 
 async function refreshPortalContext() {
@@ -94,12 +119,8 @@ async function refreshPortalContext() {
   if (fas) { endpoint = '/api/opennds/context'; body = { fas }; }
   else if (mikrotikPortal) { endpoint = '/api/mikrotik/context'; body = { clientMac, clientIp }; }
   else throw new Error('Reconnect to the hotspot sign-in page before trying again.');
-  const response = await fetchWithTimeout(endpoint, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Could not refresh this device’s hotspot session.');
-  portalToken = result.portalToken;
+  portalToken = await requestPortalContext(endpoint, body);
+  portalError = null;
 }
 
 function openPackage(item) {
@@ -154,16 +175,31 @@ function renderPackages(packages) {
 }
 
 async function loadPackages() {
-  grid.innerHTML = '<p role="status" aria-live="polite">Loading packages…</p>';
+  const cachedPackages = readPackageCache();
+  if (cachedPackages) renderPackages(cachedPackages);
+  else grid.innerHTML = '<p role="status" aria-live="polite">Loading packages…</p>';
   try {
-    let response;
+    let lastError;
     for (let attempt = 0; attempt < 2; attempt++) {
-      response = await fetchWithTimeout('/api/packages', { headers: { Accept: 'application/json' } }, 10000);
-      if (response.status !== 429 || attempt === 1) break;
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        const response = await fetchWithTimeout('/api/packages', { headers: { Accept: 'application/json' } }, 8000);
+        if (!response.ok) {
+          const error = new Error(response.status === 429 ? 'The package service is busy.' : 'Packages could not be loaded.');
+          if (response.status < 500 && response.status !== 429) throw error;
+          lastError = error;
+        } else {
+          const packages = await response.json();
+          writePackageCache(packages);
+          renderPackages(packages);
+          return;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 300));
     }
-    if (!response.ok) throw new Error(response.status === 429 ? 'The package service is busy. Please try again.' : 'Packages could not be loaded.');
-    renderPackages(await response.json());
+    if (cachedPackages) return;
+    throw lastError || new Error('Packages could not be loaded.');
   } catch (error) {
     const message = error.name === 'AbortError' ? 'Loading packages timed out. Check your connection and try again.' : error.message || 'Packages could not be loaded. Check your connection and try again.';
     grid.replaceChildren();
@@ -263,7 +299,11 @@ const handlePaymentSubmit = async event => {
     return;
   }
   await portalReady;
-  if (portalError) { restorePayButton(portalError); return; }
+  if (portalError || !portalToken) {
+    setPaymentStatus('Retrying the hotspot device check…', true);
+    try { await refreshPortalContext(); }
+    catch (error) { restorePayButton(error.message || portalError); return; }
+  }
   if (!portalToken) { restorePayButton('Join Jamii WiFi and open its sign-in page to buy access for this device.'); return; }
   paymentState = 'starting';
   payButton.textContent = 'Sending STK...';
