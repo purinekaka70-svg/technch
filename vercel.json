@@ -7,7 +7,7 @@
     }
   ],
   "builds": [
-    { "src": "api/[...path].js", "use": "@vercel/node" },
+    { "src": "api/[...path].js", "use": "@vercel/node", "config": { "maxDuration": 30 } },
     { "src": "api/cloudpay/webhook.js", "use": "@vercel/node" },
     { "src": "**", "use": "@vercel/static" }
   ],

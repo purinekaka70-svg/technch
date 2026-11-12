@@ -2,7 +2,7 @@ const grid = document.querySelector('#planGrid');
 const modal = document.querySelector('#purchaseModal');
 const fmt = value => `KSh ${Number(value).toLocaleString('en-KE')}`;
 const duration = minutes => minutes === 90 ? '1 hour 30 minutes' : minutes >= 1440 ? `${minutes / 1440} days` : minutes >= 60 ? `${minutes / 60} hours` : `${minutes} minutes`;
-let selected, portalToken = null, portalError = null, portalReady = Promise.resolve();
+let selected, portalToken = null, portalError = null, portalReady = Promise.resolve(), portalTokenCreatedAt = 0;
 let paymentState = 'idle';
 let hotspotLoginAttempt = null;
 let recoveryMode = false;
@@ -84,7 +84,7 @@ async function requestPortalContext(endpoint, body) {
     if (response.ok && result.portalToken) return result.portalToken;
     throw new Error(result.error || 'The hotspot could not verify this device.');
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('Hotspot check timed out. Confirm Wi-Fi is connected, then tap Pay to retry.');
+    if (error?.name === 'AbortError') throw new Error('Hotspot check timed out. Confirm this phone is still connected to Jamii WiFi, then retry.');
     throw error || new Error('The hotspot could not verify this device. Tap Pay to retry.');
   }
 }
@@ -113,12 +113,12 @@ if (connected) {
 if (fas) {
   history.replaceState({}, '', location.pathname);
   portalReady = requestPortalContext('/api/opennds/context', { fas })
-    .then(value => { portalToken = value; portalError = null; })
+    .then(value => { portalToken = value; portalTokenCreatedAt = Date.now(); portalError = null; })
     .catch(error => { portalError = error.message; });
 } else if (mikrotikPortal) {
   history.replaceState({}, '', location.pathname);
   portalReady = requestPortalContext('/api/mikrotik/context', { clientMac, clientIp })
-    .then(value => { portalToken = value; portalError = null; })
+    .then(value => { portalToken = value; portalTokenCreatedAt = Date.now(); portalError = null; })
     .catch(error => { portalError = error.message; });
 }
 
@@ -128,6 +128,7 @@ async function refreshPortalContext() {
   else if (mikrotikPortal) { endpoint = '/api/mikrotik/context'; body = { clientMac, clientIp }; }
   else throw new Error('Reconnect to the hotspot sign-in page before trying again.');
   portalToken = await requestPortalContext(endpoint, body);
+  portalTokenCreatedAt = Date.now();
   portalError = null;
 }
 
@@ -308,11 +309,13 @@ const handlePaymentSubmit = async event => {
     document.querySelector('#modalPhone').focus();
     return;
   }
+  // Reuse the context already fetched while the page loaded. Refresh only if
+  // that request failed or the 30-minute context is close to expiry.
   await portalReady;
-  if (portalError || !portalToken) {
-    setPaymentStatus('Retrying the hotspot device check…', true);
+  if (portalError || !portalToken || Date.now() - portalTokenCreatedAt > 25 * 60_000) {
+    setPaymentStatus('Refreshing this device’s hotspot session…', true);
     try { await refreshPortalContext(); }
-    catch (error) { restorePayButton(error.message || portalError); return; }
+    catch (error) { restorePayButton(error.message || portalError || 'Could not refresh the hotspot session. Reopen the Wi-Fi sign-in page and try again.'); return; }
   }
   if (!portalToken) { restorePayButton('Join Jamii WiFi and open its sign-in page to buy access for this device.'); return; }
   paymentState = 'starting';
@@ -320,7 +323,7 @@ const handlePaymentSubmit = async event => {
   setPaymentStatus('Sending STK...', true);
   try {
     console.log('Calling /api/pay');
-    const response = await fetchWithTimeout('/api/pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packageId: selected.id, phone, portalToken, packageName: selected.name }) }, 20000);
+    const response = await fetchWithTimeout('/api/pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packageId: selected.id, phone, portalToken, packageName: selected.name }) }, 35000);
     let result = {};
     try { result = await response.json(); } catch { /* preserve the HTTP result for safe retry handling */ }
     console.log('API response', { status: response.status, ok: response.ok, body: result });
