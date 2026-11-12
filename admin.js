@@ -153,7 +153,7 @@ async function loadDashboard() {
   try {
     const [data, firebasePackages] = await Promise.all([
       requestJson('/api/admin/dashboard', { headers: authHeaders(), cache: 'no-store' }),
-      requestJson('/api/packages.js', { headers: authHeaders(), cache: 'no-store' })
+      requestJson('/api/packages', { headers: authHeaders(), cache: 'no-store' })
     ]);
     document.body.classList.add('admin-authenticated');
     catalogue = Array.isArray(firebasePackages) ? firebasePackages : [];
