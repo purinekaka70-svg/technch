@@ -48,7 +48,11 @@ function showLogin() {
     submit.disabled = true;
     error.textContent = 'Signing in...';
     try {
-      if (!firebaseClient || !firebaseClient.auth?.app?.options?.projectId) throw new Error('Firebase Authentication is not configured for this site.');
+      if (!firebaseClient || !firebaseClient.auth?.app?.options?.projectId) {
+        const firebaseError = window.TECHNCH_FIREBASE_ERROR;
+        if (firebaseError) throw new Error(`Firebase could not start: ${firebaseError.message || firebaseError}. Check your internet connection, Firebase project settings, and authorized domain.`);
+        throw new Error('Firebase is still loading. Refresh the page and try again. If this repeats, check that gstatic.com is reachable and the deployed admin.html includes its Firebase config.');
+      }
       const credential = await firebaseClient.signInWithEmailAndPassword($('#loginEmail').value.trim(), $('#loginPassword').value);
       const idToken = await credential.user.getIdToken(true);
       const data = await requestJson('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) });
@@ -121,7 +125,7 @@ async function loadDashboard() {
   try {
     const [data, firebasePackages] = await Promise.all([
       requestJson('/api/admin/dashboard', { headers: authHeaders(), cache: 'no-store' }),
-      requestJson('/api/packages', { headers: authHeaders(), cache: 'no-store' })
+      requestJson('/api/packages.js', { headers: authHeaders(), cache: 'no-store' })
     ]);
     document.body.classList.add('admin-authenticated');
     catalogue = Array.isArray(firebasePackages) ? firebasePackages : [];
