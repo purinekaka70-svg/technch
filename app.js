@@ -7,6 +7,18 @@ let paymentState = 'idle';
 let hotspotLoginAttempt = null;
 let recoveryMode = false;
 const packageCacheKey = 'technchPackageCatalogue';
+// Render the current public catalogue immediately while the live API refreshes.
+// IDs match the live Firestore plans; the server remains authoritative for checkout.
+const fallbackPackages = [
+  { id: '1d010ddb-70cf-4337-94d4-3f34c71ba9c6', name: '1 Hour', price_kes: 10, duration_minutes: 60, is_active: true },
+  { id: 'e3fed868-a064-4cf4-9f6b-62fed59358ee', name: '1.5 Hours', price_kes: 15, duration_minutes: 90, is_active: true },
+  { id: '7651a14d-0a72-4a80-af3b-ff5666edb9e3', name: '4 Hours', price_kes: 20, duration_minutes: 240, is_active: true },
+  { id: '8a1b262c-e720-4b79-af60-39d5c4c1e67c', name: '6 Hours', price_kes: 30, duration_minutes: 360, is_active: true },
+  { id: 'be9477d3-4943-4d17-840f-cb59bd08bac1', name: '12 Hours', price_kes: 60, duration_minutes: 720, is_active: true, is_popular: true },
+  { id: 'aa6a0b6b-3995-45ff-a1b4-f05f2dd335cb', name: '24 Hours', price_kes: 80, duration_minutes: 1440, is_active: true },
+  { id: 'bd4c9ad7-803e-421d-83a8-32b7d40d8287', name: 'Weekly', price_kes: 300, duration_minutes: 10080, is_active: true },
+  { id: '2446f4cb-c23a-457d-8874-8804c1a60ef8', name: 'Monthly', price_kes: 800, duration_minutes: 43200, is_active: true, is_best_value: true }
+];
 
 function readPackageCache() {
   try {
@@ -175,7 +187,7 @@ function renderPackages(packages) {
 }
 
 async function loadPackages() {
-  const cachedPackages = readPackageCache();
+  const cachedPackages = readPackageCache() || fallbackPackages;
   if (cachedPackages) renderPackages(cachedPackages);
   else grid.innerHTML = '<p role="status" aria-live="polite">Loading packages…</p>';
   try {

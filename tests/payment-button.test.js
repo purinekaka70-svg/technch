@@ -59,6 +59,7 @@ test('Pay form posts a normalized phone after hotspot verification and shows STK
     history: { replaceState() {} }, URLSearchParams, Date: { now: () => (testNow += 60_000) }, setTimeout: (callback, delay) => setTimeout(callback, delay === 3000 ? 0 : delay), clearTimeout, AbortController,
     encodeURIComponent, console
   });
+  assert.equal(cards.length, 8, 'starter packages render immediately before the live API responds');
   await new Promise(resolve => setTimeout(resolve, 350));
 
   assert.equal(cards.length, 1);
