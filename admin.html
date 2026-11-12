@@ -139,26 +139,10 @@
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
-    import { getAuth, onIdTokenChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-    const firebaseConfig = {
+    window.TECHNCH_FIREBASE_CONFIG = {
       apiKey: "AIzaSyCySxLRq-qLu1RqkdFip3eOabTgLgvjnes",
-      authDomain: "technch--hotspot.firebaseapp.com",
-      projectId: "technch--hotspot",
-      storageBucket: "technch--hotspot.firebasestorage.app",
-      messagingSenderId: "88167929325",
-      appId: "1:88167929325:web:adb3b385b47df6b94083e4",
-      measurementId: "G-G91DZQ7MJN"
+      projectId: "technch--hotspot"
     };
-    try {
-      const auth = getAuth(initializeApp(firebaseConfig));
-      window.TECHNCH_FIREBASE = { auth, onIdTokenChanged: callback => onIdTokenChanged(auth, callback), signInWithEmailAndPassword: (email, password) => signInWithEmailAndPassword(auth, email, password), signInWithCustomToken: token => signInWithCustomToken(auth, token), signOut: () => signOut(auth) };
-      window.dispatchEvent(new Event('technch-firebase-ready'));
-    } catch (error) {
-      console.error('Firebase initialization failed', error);
-      window.TECHNCH_FIREBASE_ERROR = error;
-      window.dispatchEvent(new Event('technch-firebase-error'));
-    }
   </script>
   <script type="module" src="admin.js"></script>
 </body>

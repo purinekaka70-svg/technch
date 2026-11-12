@@ -4,7 +4,39 @@ const durationLabel = minutes => minutes === 90 ? '1 hr 30 min' : minutes % 1440
 const kenyaTime = value => value ? new Intl.DateTimeFormat('en-KE', { timeZone: 'Africa/Nairobi', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '--';
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 let catalogue = [], breakdown = [], routerDevices = [], parentGateways = [], token = sessionStorage.getItem('technchAdminToken'), toastTimer, deferredInstallPrompt = null;
-const firebaseClient = window.TECHNCH_FIREBASE;
+const firebaseConfig = window.TECHNCH_FIREBASE_CONFIG || {};
+const firebaseClient = {
+  async signInWithEmailAndPassword(email, password) {
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(firebaseConfig.apiKey || '')}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const code = result.error?.message || 'AUTHENTICATION_FAILED';
+      const messages = {
+        EMAIL_NOT_FOUND: 'No Firebase account exists for this email.',
+        INVALID_PASSWORD: 'The password is incorrect.',
+        INVALID_LOGIN_CREDENTIALS: 'Email or password is incorrect.',
+        OPERATION_NOT_ALLOWED: 'Enable Email/Password sign-in in Firebase Authentication.',
+        API_KEY_INVALID: 'Firebase rejected the web API key.',
+        TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many attempts. Wait and try again.'
+      };
+      throw new Error(messages[code] || `Firebase sign-in failed: ${code}`);
+    }
+    return { user: { getIdToken: async () => result.idToken } };
+  },
+  async signInWithCustomToken(customToken) {
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(firebaseConfig.apiKey || '')}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: customToken, returnSecureToken: true })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(`Admin session exchange failed: ${result.error?.message || response.status}`);
+    return { user: { getIdToken: async () => result.idToken } };
+  },
+  async signOut() { sessionStorage.removeItem('technchAdminToken'); }
+};
 let currentAdminPage = 'overview';
 const authHeaders = () => token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -48,11 +80,7 @@ function showLogin() {
     submit.disabled = true;
     error.textContent = 'Signing in...';
     try {
-      if (!firebaseClient || !firebaseClient.auth?.app?.options?.projectId) {
-        const firebaseError = window.TECHNCH_FIREBASE_ERROR;
-        if (firebaseError) throw new Error(`Firebase could not start: ${firebaseError.message || firebaseError}. Check your internet connection, Firebase project settings, and authorized domain.`);
-        throw new Error('Firebase is still loading. Refresh the page and try again. If this repeats, check that gstatic.com is reachable and the deployed admin.html includes its Firebase config.');
-      }
+      if (!firebaseConfig.apiKey || !firebaseConfig.projectId) throw new Error('Firebase web configuration is missing from this page.');
       const credential = await firebaseClient.signInWithEmailAndPassword($('#loginEmail').value.trim(), $('#loginPassword').value);
       const idToken = await credential.user.getIdToken(true);
       const data = await requestJson('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) });
@@ -445,15 +473,7 @@ window.addEventListener('beforeinstallprompt', event => {
   deferredInstallPrompt = event;
 });
 window.addEventListener('appinstalled', () => { $('#installApp').hidden = true; });
-if (firebaseClient) firebaseClient.onIdTokenChanged(async user => {
 if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) $('#installApp').hidden = true;
-  if (!user) { sessionStorage.removeItem('technchAdminToken'); token = null; if (!document.querySelector('.login')) showLogin(); return; }
-  try {
-    token = await user.getIdToken();
-    sessionStorage.setItem('technchAdminToken', token);
-    if (!document.querySelector('.login')) await loadDashboard();
-  } catch { sessionStorage.removeItem('technchAdminToken'); token = null; }
-});
 if ('serviceWorker' in navigator) {
   let refreshingForWorkerUpdate = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
