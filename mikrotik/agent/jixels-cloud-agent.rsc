@@ -2,7 +2,7 @@
 # Paste this file's contents into System > Scripts > Add > Source.
 # Replace the token placeholder before saving. Keep the token private.
 
-:local apiUrl "https://technch-hotspot.vercel.app/api/mikrotik-agent/commands"
+:local apiUrl "https://technch-yey9.vercel.app/api/mikrotik-agent/commands"
 :local agentToken "PASTE_THE_EXISTING_MIKROTIK_AGENT_TOKEN_HERE"
 :local authHeader ("Authorization: Bearer " . $agentToken)
 :local jsonHeaders ("Authorization: Bearer " . $agentToken . ",Content-Type: application/json")
