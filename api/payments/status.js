@@ -2,7 +2,7 @@ import { firebaseDb } from '../../lib/firebase-db.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
 import { cloudPayPayment, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
-import { isMikrotikAgentMode, mikrotikLoginCredentials } from '../../lib/gateway.js';
+import { isMikrotikAgentMode, mikrotikHotspotLoginUrl, mikrotikLoginCredentials } from '../../lib/gateway.js';
 
 const failureMessages = {
   '1': 'M-Pesa declined the payment because the wallet balance was insufficient.',
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   if (data.status === 'FAILED') result.failureMessage = paymentFailureMessage(data.raw_callback);
   if (isMikrotikAgentMode() && data.mikrotik_portal_context_id && session?.session_status === 'ACTIVE') {
     const { data: context } = await db.from('mikrotik_portal_contexts').select('hotspot_login_url').eq('id', data.mikrotik_portal_context_id).maybeSingle();
-    result.mikrotikLogin = { url: context?.hotspot_login_url || process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) };
+    result.mikrotikLogin = { url: mikrotikHotspotLoginUrl(context?.hotspot_login_url), ...mikrotikLoginCredentials(session.id) };
   }
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json(result);

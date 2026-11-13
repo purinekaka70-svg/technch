@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { firebaseDb } from '../../lib/firebase-db.js';
-import { isGatewayConfigured, isMikrotikAgentMode, mikrotikGatewayId, mikrotikLoginCredentials } from '../../lib/gateway.js';
+import { isGatewayConfigured, isMikrotikAgentMode, mikrotikGatewayId, mikrotikHotspotLoginUrl, mikrotikLoginCredentials } from '../../lib/gateway.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
 import { cloudPayPayment, cloudPayReceipt, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
@@ -98,6 +98,6 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json({
     success: true,
-    mikrotikLogin: { url: paidContext.hotspot_login_url || currentContext.hotspot_login_url || process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) }
+    mikrotikLogin: { url: mikrotikHotspotLoginUrl(paidContext.hotspot_login_url || currentContext.hotspot_login_url), ...mikrotikLoginCredentials(session.id) }
   });
 }
