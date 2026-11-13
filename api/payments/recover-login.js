@@ -3,20 +3,22 @@ import { firebaseDb } from '../../lib/firebase-db.js';
 import { isGatewayConfigured, isMikrotikAgentMode, mikrotikGatewayId, mikrotikLoginCredentials } from '../../lib/gateway.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
+import { cloudPayPayment, cloudPayReceipt, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
 
 const kenyaPhone = value => String(value || '').replace(/\D/g, '').replace(/^0/, '254');
 
-async function reconcilePendingPayments(db, phone, macAddress) {
-  const { data: pending, error } = await db.from('payments').select('id,checkout_request_id')
-    .eq('status', 'PENDING').eq('phone', phone).eq('mac_address', macAddress).limit(20);
-  if (error || !pending?.length) return;
+async function reconcilePayments(db, phone, macAddress) {
+  const { data: candidates, error } = await db.from('payments').select('id,checkout_request_id,status,mpesa_receipt_number')
+    .eq('phone', phone).eq('mac_address', macAddress).in('status', ['PENDING', 'SUCCESS', 'FAILED']).limit(50);
+  const candidatesNeedingLookup = (candidates || []).filter(payment => payment.status !== 'SUCCESS' || !payment.mpesa_receipt_number);
+  if (error || !candidatesNeedingLookup.length) return;
   const base = cloudPayBase();
   if (!base) return;
   let token;
   try { token = await cloudPayToken(); }
   catch { return; }
 
-  for (const payment of pending) {
+  for (const payment of candidatesNeedingLookup) {
     if (!payment.checkout_request_id) continue;
     try {
       const response = await fetch(`${base}/payments/status/${encodeURIComponent(payment.checkout_request_id)}`, {
@@ -24,12 +26,11 @@ async function reconcilePendingPayments(db, phone, macAddress) {
       });
       if (!response.ok) continue;
       const result = await response.json();
-      const providerResult = result.data?.payment || result.data?.transaction || result.data || result.payment || result.transaction || result;
-      const status = String(providerResult.status || '').toUpperCase();
+      const providerResult = cloudPayPayment(result);
+      const status = cloudPayStatus(providerResult.status);
       if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) continue;
       await applyCloudPayResult(db, {
-        ...providerResult,
-        reference: payment.checkout_request_id,
+        ...normalizeCloudPayResult(result, payment.checkout_request_id),
         status,
         event: status === 'COMPLETED' ? 'payment.completed' : 'payment.failed',
         channel: providerResult.channel || 'MPESA',
@@ -62,12 +63,15 @@ export default async function handler(req, res) {
 
   // A webhook can be delayed or missed. Ask CloudPay about this customer's
   // pending transactions on this exact device before declaring their receipt unknown.
-  await reconcilePendingPayments(db, normalizedPhone, currentContext.mac_address);
+  await reconcilePayments(db, normalizedPhone, currentContext.mac_address);
 
-  const { data: payment, error: paymentError } = await db.from('payments')
-    .select('id,mikrotik_portal_context_id').eq('status', 'SUCCESS').eq('phone', normalizedPhone)
-    .eq('mpesa_receipt_number', normalizedReceipt).maybeSingle();
+  const { data: successfulPayments, error: paymentError } = await db.from('payments')
+    .select('id,mikrotik_portal_context_id,mpesa_receipt_number,raw_callback').eq('status', 'SUCCESS')
+    .eq('phone', normalizedPhone).limit(100);
   if (paymentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
+  const payment = (successfulPayments || []).find(item =>
+    String(item.mpesa_receipt_number || cloudPayReceipt(item.raw_callback) || '').trim().toUpperCase() === normalizedReceipt
+  ) || null;
   if (!payment) {
     const { data: stillPending, error: pendingError } = await db.from('payments').select('id')
       .eq('status', 'PENDING').eq('phone', normalizedPhone).eq('mac_address', currentContext.mac_address).limit(1);

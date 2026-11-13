@@ -1,6 +1,7 @@
 import { firebaseDb } from '../../lib/firebase-db.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
+import { cloudPayPayment, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
 import { isMikrotikAgentMode, mikrotikLoginCredentials } from '../../lib/gateway.js';
 
 const failureMessages = {
@@ -25,12 +26,11 @@ async function reconcileWithCloudPay(reference) {
     });
     if (!response.ok) return;
     const result = await response.json();
-    const providerResult = result.data?.payment || result.data?.transaction || result.data || result.payment || result.transaction || result;
-    const status = String(providerResult.status || '').toUpperCase();
+    const providerResult = cloudPayPayment(result);
+    const status = cloudPayStatus(providerResult.status);
     if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) return;
     await applyCloudPayResult(firebaseDb(), {
-      ...providerResult,
-      reference,
+      ...normalizeCloudPayResult(result, reference),
       status,
       event: status === 'COMPLETED' ? 'payment.completed' : 'payment.failed',
       channel: providerResult.channel || 'MPESA',

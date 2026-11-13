@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { firebaseDb } from '../../lib/firebase-db.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
+import { cloudPayPayment, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -33,17 +34,25 @@ export default async function handler(req, res) {
     console.info('CloudPay webhook acknowledged non-payment event', { eventType: eventType || 'unspecified' });
     return res.status(200).send('Acknowledged');
   }
-  event.event = eventType;
-  if (!event.reference || !['COMPLETED', 'FAILED', 'CANCELLED'].includes(event.status)) {
+  const payment = cloudPayPayment(event);
+  const normalized = {
+    ...normalizeCloudPayResult(event),
+    event: eventType,
+    reference: payment.reference || event.reference,
+    channel: payment.channel || event.channel,
+    currency: payment.currency || event.currency,
+    amount: payment.amount ?? event.amount
+  };
+  if (!normalized.reference || !['COMPLETED', 'FAILED', 'CANCELLED'].includes(normalized.status)) {
     // Signed connectivity probes can label themselves as payment events while
     // omitting transaction fields. Acknowledge without changing payment state.
-    console.info('CloudPay webhook acknowledged event without transaction fields', { eventType, hasReference: Boolean(event.reference), status: event.status || null });
+    console.info('CloudPay webhook acknowledged event without transaction fields', { eventType, hasReference: Boolean(normalized.reference), status: normalized.status || null });
     return res.status(200).send('Acknowledged; no transaction processed');
   }
 
   const db = firebaseDb();
   try {
-    const result = await applyCloudPayResult(db, event);
+    const result = await applyCloudPayResult(db, normalized);
     if (result === 'not_found') return res.status(503).send('Payment record not ready; retry webhook');
   } catch { return res.status(503).send('Could not record payment result; retry webhook'); }
   return res.status(200).send('Accepted');

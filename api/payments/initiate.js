@@ -77,8 +77,12 @@ export default async function handler(req, res) {
     try { result = await response.json(); } catch { /* retain provider HTTP status for a clear error */ }
     const reference = result.data?.reference || result.reference;
     if (!response.ok || result.status !== 'success' || !reference) {
-      await db.from('payments').update({ status: 'FAILED', raw_callback: result }).eq('id', payment.id).eq('status', 'PENDING');
-      return res.status(502).json({ success: false, retryable: response.status < 500, paymentStarted: false, error: result.message || result.error || `CloudPay could not start the M-Pesa prompt (${response.status}).` });
+      // A provider 5xx or malformed 2xx can happen after Safaricom accepted
+      // the STK request. Keep that payment reconcilable and never tell the
+      // customer to start another charge until its status is known.
+      const definitelyRejected = !response.ok && response.status < 500;
+      await db.from('payments').update({ status: definitelyRejected ? 'FAILED' : 'PENDING', raw_callback: result }).eq('id', payment.id).eq('status', 'PENDING');
+      return res.status(502).json({ success: false, retryable: definitelyRejected, paymentStarted: !definitelyRejected, error: result.message || result.error || `CloudPay could not confirm whether the M-Pesa prompt started (${response.status}).` });
     }
     const { error: updateError } = await db.from('payments').update({ checkout_request_id: reference }).eq('id', payment.id).eq('status', 'PENDING');
     if (updateError) {
@@ -88,9 +92,9 @@ export default async function handler(req, res) {
     await db.from(contextTable).update({ consumed_at: new Date().toISOString(), payment_id: payment.id }).eq('id', context.id);
     return res.status(202).json({ success: true, checkoutRequestId: reference, statusToken, status: 'PENDING', message: 'STK sent. Check your phone and enter your M-Pesa PIN.' });
   } catch (error) {
-    await db.from('payments').update({ status: 'FAILED', raw_callback: { error: error.message || 'CloudPay request failed' } }).eq('id', payment.id).eq('status', 'PENDING');
     console.error('CloudPay STK request failed', error);
     const oauthFailure = /CloudPay (?:rejected the consumer credentials|OAuth|is not configured|authentication)/i.test(error.message || '');
+    await db.from('payments').update({ status: oauthFailure ? 'FAILED' : 'PENDING', raw_callback: { error: error.message || 'CloudPay request failed' } }).eq('id', payment.id).eq('status', 'PENDING');
     return res.status(502).json({ success: false, retryable: oauthFailure, paymentStarted: !oauthFailure, error: error.message || 'Could not connect to CloudPay.' });
   }
 }
