@@ -1,8 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isPortalContextUsable } from '../lib/portal-context.js';
+import { isPortalContextUsable, portalContextSelect } from '../lib/portal-context.js';
 
 const now = Date.parse('2026-11-12T10:00:00.000Z');
+
+test('portal checkout selects expiration for both gateway types', () => {
+  assert.match(portalContextSelect(true), /expires_at/);
+  assert.match(portalContextSelect(false), /expires_at/);
+});
 
 test('a portal context with a missing consumed_at field is still usable', () => {
   assert.equal(isPortalContextUsable({ expires_at: '2026-11-12T10:30:00.000Z' }, now), true);

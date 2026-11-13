@@ -149,6 +149,42 @@ function renderRevenue(revenue) {
   $('#breakdown').innerHTML = breakdown.length ? breakdown.map(row => `<div class="breakdown-row"><span>${escapeHtml(row.name)}<small>${Number(row.sold || 0).toLocaleString('en-KE')} sold</small></span><b>${fmt(row.revenue)}</b></div>`).join('') : '<p class="table-message">No package sales to show yet.</p>';
 }
 
+function renderPayments(payments) {
+  const rows = $('#payments');
+  if (!rows) return;
+  rows.innerHTML = payments.length ? payments.map(payment => {
+    const session = payment.wifi_sessions;
+    const state = session?.session_status || 'NOT PREPARED';
+    const recoverable = !session || ['GATEWAY_FAILED', 'WAITING_GATEWAY'].includes(state);
+    return `<tr>
+      <td>${escapeHtml(payment.phone || '--')}</td>
+      <td>${escapeHtml(payment.wifi_packages?.name || 'Package unavailable')}</td>
+      <td>${fmt(payment.amount_kes)}<small>${escapeHtml(kenyaTime(payment.created_at))}</small></td>
+      <td>${escapeHtml(payment.mpesa_receipt_number || 'Pending receipt')}</td>
+      <td><span class="status-pill ${statusClass(state)}">${escapeHtml(String(state).replaceAll('_', ' '))}</span></td>
+      <td><button class="action-button" type="button" data-payment-recover="${escapeHtml(payment.id)}" ${recoverable ? '' : 'disabled'}>Already paid</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="table-message">No confirmed payments yet.</td></tr>';
+}
+
+async function recoverPayment(paymentId, button) {
+  if (!window.confirm('This payment is confirmed. Queue hotspot access again for this purchase?')) return;
+  button.disabled = true;
+  button.textContent = 'Queueing...';
+  try {
+    const result = await requestJson('/api/admin/payments/recover', {
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentId })
+    });
+    notify(result.message || 'Paid access queued.');
+    await loadDashboard();
+  } catch (error) {
+    notify(error.message || 'Could not queue paid access.', true);
+    button.disabled = false;
+    button.textContent = 'Already paid';
+  }
+}
+
 async function loadDashboard() {
   try {
     const [data, firebasePackages] = await Promise.all([
@@ -162,6 +198,7 @@ async function loadDashboard() {
     renderPackages();
     renderSessions(Array.isArray(data.sessions) ? data.sessions : []);
     renderRevenue(data.revenue || {});
+    renderPayments(Array.isArray(data.payments) ? data.payments : []);
     $('#updatedAt').textContent = `Updated ${kenyaTime(new Date().toISOString())}`;
   } catch (exception) {
     if (!token) return;
@@ -170,6 +207,7 @@ async function loadDashboard() {
     $('#updatedAt').textContent = 'Dashboard data could not be refreshed';
     $('#packages').innerHTML = `<tr><td colspan="6" class="table-message">${escapeHtml(exception.message)}</td></tr>`;
     $('#sessions').innerHTML = '<tr><td colspan="5" class="table-message">Dashboard data could not be loaded.</td></tr>';
+    if ($('#payments')) $('#payments').innerHTML = '<tr><td colspan="6" class="table-message">Payment data could not be loaded.</td></tr>';
     $('#revenue').innerHTML = '<p class="table-message">Revenue data could not be loaded.</p>';
   }
 }
@@ -458,6 +496,10 @@ $('#cancelRouter').onclick = () => $('#routerEditor').close();
 $('#packageSearch').oninput = renderPackages;
 $('#packageFilter').onchange = renderPackages;
 $('#logout').onclick = async () => { sessionStorage.removeItem('technchAdminToken'); token = null; await firebaseClient?.signOut(); showLogin(); };
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-payment-recover]');
+  if (button && !button.disabled) recoverPayment(button.dataset.paymentRecover, button);
+});
 $('#installApp').onclick = async () => {
   if (!deferredInstallPrompt) {
     notify('To install, use your browser menu and choose Install app or Add to Home screen.');
