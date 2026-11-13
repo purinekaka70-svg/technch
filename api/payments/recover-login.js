@@ -7,24 +7,43 @@ import { cloudPayPayment, cloudPayReceipt, cloudPayStatus, normalizeCloudPayResu
 
 const kenyaPhone = value => String(value || '').replace(/\D/g, '').replace(/^0/, '254');
 
-async function reconcilePayments(db, phone, macAddress) {
-  const { data: candidates, error } = await db.from('payments').select('id,checkout_request_id,status,mpesa_receipt_number')
-    .eq('phone', phone).eq('mac_address', macAddress).in('status', ['PENDING', 'SUCCESS', 'FAILED']).limit(50);
-  const candidatesNeedingLookup = (candidates || []).filter(payment => payment.status !== 'SUCCESS' || !payment.mpesa_receipt_number);
-  if (error || !candidatesNeedingLookup.length) return;
+function transactionRows(value, rows = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) transactionRows(item, rows);
+    return rows;
+  }
+  if (!value || typeof value !== 'object') return rows;
+  const payment = cloudPayPayment(value);
+  if (payment && typeof payment === 'object' && !Array.isArray(payment)
+    && payment.amount != null && cloudPayReceipt(payment)
+    && (payment.reference || payment.transactionId || payment.id)) rows.push(payment);
+  for (const child of Object.values(value)) {
+    if (child && typeof child === 'object') transactionRows(child, rows);
+  }
+  return rows;
+}
+
+async function reconcilePayments(db, phone, macAddress, receipt) {
+  const { data: candidates, error } = await db.from('payments').select('id,phone,checkout_request_id,status,mpesa_receipt_number,amount_kes')
+    .eq('mac_address', macAddress).in('status', ['PENDING', 'SUCCESS', 'FAILED']).limit(50);
+  if (error) return true;
+  const candidatesNeedingLookup = (candidates || []).filter(payment =>
+    kenyaPhone(payment.phone) === phone && (payment.status !== 'SUCCESS' || !payment.mpesa_receipt_number)
+  );
+  if (!candidatesNeedingLookup.length) return false;
   const base = cloudPayBase();
-  if (!base) return;
+  if (!base) return true;
   let token;
   try { token = await cloudPayToken(); }
-  catch { return; }
+  catch { return true; }
+  let providerUnavailable = false;
 
-  for (const payment of candidatesNeedingLookup) {
-    if (!payment.checkout_request_id) continue;
+  for (const payment of candidatesNeedingLookup.filter(item => item.checkout_request_id)) {
     try {
       const response = await fetch(`${base}/payments/status/${encodeURIComponent(payment.checkout_request_id)}`, {
         headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000)
       });
-      if (!response.ok) continue;
+      if (!response.ok) { providerUnavailable = true; continue; }
       const result = await response.json();
       const providerResult = cloudPayPayment(result);
       const status = cloudPayStatus(providerResult.status);
@@ -38,8 +57,53 @@ async function reconcilePayments(db, phone, macAddress) {
       }, { trustedStatusLookup: true });
     } catch {
       // Keep recovery safe when CloudPay is unavailable; never infer payment from the user's receipt alone.
+      providerUnavailable = true;
     }
   }
+
+  // If the STK request timed out after CloudPay accepted it, we may have no
+  // CloudPay reference saved locally. Recover only from CloudPay's authenticated
+  // transaction list and require an exact receipt, phone, amount, and completed status.
+  if (candidatesNeedingLookup.some(payment => !payment.checkout_request_id)) {
+    try {
+      const response = await fetch(`${base}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000)
+      });
+      if (!response.ok) return true;
+      const result = await response.json();
+      const transactions = transactionRows(result);
+      for (const payment of candidatesNeedingLookup.filter(item => !item.checkout_request_id)) {
+        const transaction = transactions.find(item => {
+          const status = cloudPayStatus(item.status);
+          const txReceipt = cloudPayReceipt(item);
+          const txPhone = kenyaPhone(item.phone || item.phoneNumber || item.msisdn || item.mobileNumber);
+          const channel = String(item.channel || item.paymentMethod || item.method || '').toUpperCase();
+          const currency = String(item.currency || 'KES').toUpperCase();
+          return status === 'COMPLETED' && txReceipt === receipt && txPhone === phone
+            && Number(item.amount) === Number(payment.amount_kes)
+            && (!channel || channel.includes('MPESA')) && currency === 'KES';
+        });
+        if (!transaction) continue;
+        const reference = String(transaction.reference || transaction.transactionId || transaction.id || `receipt:${receipt}`);
+        const { error: saveError } = await db.from('payments').update({ checkout_request_id: reference })
+          .eq('id', payment.id).in('status', ['PENDING', 'FAILED', 'SUCCESS']);
+        if (saveError) continue;
+        await applyCloudPayResult(db, {
+          ...transaction,
+          reference,
+          status: 'COMPLETED',
+          event: 'payment.completed',
+          channel: transaction.channel || 'MPESA',
+          currency: transaction.currency || 'KES',
+          receipt
+        }, { trustedStatusLookup: true });
+      }
+    } catch {
+      // The regular status lookup remains available if CloudPay's list endpoint is unavailable.
+      providerUnavailable = true;
+    }
+  }
+  return providerUnavailable;
 }
 
 export default async function handler(req, res) {
@@ -63,20 +127,26 @@ export default async function handler(req, res) {
 
   // A webhook can be delayed or missed. Ask CloudPay about this customer's
   // pending transactions on this exact device before declaring their receipt unknown.
-  await reconcilePayments(db, normalizedPhone, currentContext.mac_address);
+  const providerUnavailable = await reconcilePayments(db, normalizedPhone, currentContext.mac_address, normalizedReceipt);
 
-  const { data: successfulPayments, error: paymentError } = await db.from('payments')
-    .select('id,mikrotik_portal_context_id,mpesa_receipt_number,raw_callback').eq('status', 'SUCCESS')
-    .eq('phone', normalizedPhone).limit(100);
-  if (paymentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
-  const payment = (successfulPayments || []).find(item =>
-    String(item.mpesa_receipt_number || cloudPayReceipt(item.raw_callback) || '').trim().toUpperCase() === normalizedReceipt
-  ) || null;
+  const paymentFields = 'id,phone,mikrotik_portal_context_id,mpesa_receipt_number,raw_callback';
+  const { data: receiptMatches, error: receiptError } = await db.from('payments').select(paymentFields)
+    .eq('status', 'SUCCESS').eq('mpesa_receipt_number', normalizedReceipt).limit(20);
+  if (receiptError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
+  let payment = (receiptMatches || []).find(item => kenyaPhone(item.phone) === normalizedPhone) || null;
+  if (!payment) {
+    const { data: successfulPayments, error: paymentError } = await db.from('payments').select(paymentFields)
+      .eq('status', 'SUCCESS').eq('phone', normalizedPhone).limit(100);
+    if (paymentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
+    payment = (successfulPayments || []).find(item => kenyaPhone(item.phone) === normalizedPhone
+      && String(item.mpesa_receipt_number || cloudPayReceipt(item.raw_callback) || '').trim().toUpperCase() === normalizedReceipt) || null;
+  }
   if (!payment) {
     const { data: stillPending, error: pendingError } = await db.from('payments').select('id')
       .eq('status', 'PENDING').eq('phone', normalizedPhone).eq('mac_address', currentContext.mac_address).limit(1);
     if (pendingError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
     if (stillPending?.length) return res.status(409).json({ error: 'CloudPay has not confirmed this payment yet. Do not pay again; wait briefly, then tap Restore access again.' });
+    if (providerUnavailable) return res.status(503).json({ error: 'CloudPay could not be reached to verify this receipt. Do not pay again; wait a moment and tap Restore access again.' });
     return res.status(404).json({ error: 'No confirmed payment matches this phone number and M-Pesa receipt on this device. Check the receipt and phone number; do not pay again.' });
   }
 
