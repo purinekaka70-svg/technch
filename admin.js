@@ -154,14 +154,16 @@ function renderPayments(payments) {
   if (!rows) return;
   rows.innerHTML = payments.length ? payments.map(payment => {
     const session = payment.wifi_sessions;
-    const state = session?.session_status || 'NOT PREPARED';
+    const expiredByTime = session?.expiry_time && Date.parse(session.expiry_time) <= Date.now();
+    const state = payment.access_status || (expiredByTime ? 'EXPIRED' : session?.session_status || 'NOT PREPARED');
     const recoverable = !session || ['GATEWAY_FAILED', 'WAITING_GATEWAY'].includes(state);
-    return `<tr>
+    const stateLabel = state === 'EXPIRED' ? 'Expired' : String(state).replaceAll('_', ' ');
+    return `<tr class="${state === 'EXPIRED' ? 'expired-payment-row' : ''}">
       <td>${escapeHtml(payment.phone || '--')}</td>
       <td>${escapeHtml(payment.wifi_packages?.name || 'Package unavailable')}</td>
       <td>${fmt(payment.amount_kes)}<small>${escapeHtml(kenyaTime(payment.created_at))}</small></td>
       <td>${escapeHtml(payment.mpesa_receipt_number || 'Pending receipt')}</td>
-      <td><span class="status-pill ${statusClass(state)}">${escapeHtml(String(state).replaceAll('_', ' '))}</span></td>
+      <td><span class="status-pill ${statusClass(state)}">${escapeHtml(stateLabel)}</span></td>
       <td><button class="action-button" type="button" data-payment-recover="${escapeHtml(payment.id)}" ${recoverable ? '' : 'disabled'}>Already paid</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan="6" class="table-message">No confirmed payments yet.</td></tr>';

@@ -17,3 +17,4 @@ h1, h2, h3, h4, h5, h6 { font-family: Arial, Helvetica, sans-serif !important; f
 
 .admin-view{display:none}.admin-view.active{display:block}
 .install-icon{display:block;width:22px;height:22px;padding:3px;border-radius:6px;background:var(--red);fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.expired-payment-row{background:#fff7f7}.expired-payment-row td{color:#8c3a42}.expired-payment-row td:first-child{box-shadow:inset 3px 0 #e53945}
