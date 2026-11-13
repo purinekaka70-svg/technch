@@ -1,8 +1,45 @@
 import { createHash } from 'node:crypto';
 import { firebaseDb } from '../../lib/firebase-db.js';
 import { isGatewayConfigured, isMikrotikAgentMode, mikrotikGatewayId, mikrotikLoginCredentials } from '../../lib/gateway.js';
+import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
+import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
 
 const kenyaPhone = value => String(value || '').replace(/\D/g, '').replace(/^0/, '254');
+
+async function reconcilePendingPayments(db, phone, macAddress) {
+  const { data: pending, error } = await db.from('payments').select('id,checkout_request_id')
+    .eq('status', 'PENDING').eq('phone', phone).eq('mac_address', macAddress).limit(20);
+  if (error || !pending?.length) return;
+  const base = cloudPayBase();
+  if (!base) return;
+  let token;
+  try { token = await cloudPayToken(); }
+  catch { return; }
+
+  for (const payment of pending) {
+    if (!payment.checkout_request_id) continue;
+    try {
+      const response = await fetch(`${base}/payments/status/${encodeURIComponent(payment.checkout_request_id)}`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000)
+      });
+      if (!response.ok) continue;
+      const result = await response.json();
+      const providerResult = result.data?.payment || result.data?.transaction || result.data || result.payment || result.transaction || result;
+      const status = String(providerResult.status || '').toUpperCase();
+      if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) continue;
+      await applyCloudPayResult(db, {
+        ...providerResult,
+        reference: payment.checkout_request_id,
+        status,
+        event: status === 'COMPLETED' ? 'payment.completed' : 'payment.failed',
+        channel: providerResult.channel || 'MPESA',
+        currency: providerResult.currency || 'KES'
+      }, { trustedStatusLookup: true });
+    } catch {
+      // Keep recovery safe when CloudPay is unavailable; never infer payment from the user's receipt alone.
+    }
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -23,11 +60,21 @@ export default async function handler(req, res) {
   if (contextError) return res.status(503).json({ error: 'Could not verify this hotspot device. Reopen its sign-in page and try again.' });
   if (!currentContext) return res.status(400).json({ error: 'Reconnect to Technch- HOTSPOT and reopen its sign-in page on this same device.' });
 
+  // A webhook can be delayed or missed. Ask CloudPay about this customer's
+  // pending transactions on this exact device before declaring their receipt unknown.
+  await reconcilePendingPayments(db, normalizedPhone, currentContext.mac_address);
+
   const { data: payment, error: paymentError } = await db.from('payments')
     .select('id,mikrotik_portal_context_id').eq('status', 'SUCCESS').eq('phone', normalizedPhone)
     .eq('mpesa_receipt_number', normalizedReceipt).maybeSingle();
   if (paymentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
-  if (!payment) return res.status(404).json({ error: 'Payment not found for this phone and receipt. Check the M-Pesa message; do not pay again.' });
+  if (!payment) {
+    const { data: stillPending, error: pendingError } = await db.from('payments').select('id')
+      .eq('status', 'PENDING').eq('phone', normalizedPhone).eq('mac_address', currentContext.mac_address).limit(1);
+    if (pendingError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
+    if (stillPending?.length) return res.status(409).json({ error: 'CloudPay has not confirmed this payment yet. Do not pay again; wait briefly, then tap Restore access again.' });
+    return res.status(404).json({ error: 'No confirmed payment matches this phone number and M-Pesa receipt on this device. Check the receipt and phone number; do not pay again.' });
+  }
 
   const { data: paidContext, error: paidContextError } = await db.from('mikrotik_portal_contexts')
     .select('gateway_id,mac_address').eq('id', payment.mikrotik_portal_context_id).maybeSingle();
