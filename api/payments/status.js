@@ -58,7 +58,8 @@ export default async function handler(req, res) {
   const result = { status: data.status, session: session?.session_status || null, expiresAt: session?.expiry_time || null };
   if (data.status === 'FAILED') result.failureMessage = paymentFailureMessage(data.raw_callback);
   if (isMikrotikAgentMode() && data.mikrotik_portal_context_id && session?.session_status === 'ACTIVE') {
-    result.mikrotikLogin = { url: process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) };
+    const { data: context } = await db.from('mikrotik_portal_contexts').select('hotspot_login_url').eq('id', data.mikrotik_portal_context_id).maybeSingle();
+    result.mikrotikLogin = { url: context?.hotspot_login_url || process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) };
   }
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json(result);

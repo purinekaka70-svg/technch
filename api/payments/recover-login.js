@@ -56,7 +56,7 @@ export default async function handler(req, res) {
   const db = firebaseDb();
   const tokenHash = createHash('sha256').update(portalToken).digest('hex');
   const { data: currentContext, error: contextError } = await db.from('mikrotik_portal_contexts')
-    .select('gateway_id,mac_address').eq('token_hash', tokenHash).eq('gateway_id', mikrotikGatewayId())
+    .select('gateway_id,mac_address,hotspot_login_url').eq('token_hash', tokenHash).eq('gateway_id', mikrotikGatewayId())
     .gt('expires_at', new Date().toISOString()).maybeSingle();
   if (contextError) return res.status(503).json({ error: 'Could not verify this hotspot device. Reopen its sign-in page and try again.' });
   if (!currentContext) return res.status(400).json({ error: 'Reconnect to Technch- HOTSPOT and reopen its sign-in page on this same device.' });
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
   }
 
   const { data: paidContext, error: paidContextError } = await db.from('mikrotik_portal_contexts')
-    .select('gateway_id,mac_address').eq('id', payment.mikrotik_portal_context_id).maybeSingle();
+    .select('gateway_id,mac_address,hotspot_login_url').eq('id', payment.mikrotik_portal_context_id).maybeSingle();
   if (paidContextError) return res.status(503).json({ error: 'Could not verify which hotspot device made this payment.' });
   if (!paidContext || paidContext.gateway_id !== currentContext.gateway_id || paidContext.mac_address !== currentContext.mac_address) {
     return res.status(404).json({ error: 'That payment belongs to a different device. Reopen the sign-in page on the device that made the payment.' });
@@ -98,6 +98,6 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json({
     success: true,
-    mikrotikLogin: { url: process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) }
+    mikrotikLogin: { url: paidContext.hotspot_login_url || currentContext.hotspot_login_url || process.env.MIKROTIK_HOTSPOT_LOGIN_URL, ...mikrotikLoginCredentials(session.id) }
   });
 }

@@ -102,6 +102,7 @@ const fas = params.get('fas');
 const mikrotikPortal = params.get('gateway') === 'mikrotik';
 const clientMac = params.get('clientmac');
 const clientIp = params.get('clientip');
+const hotspotLoginUrl = params.get('hotspotlogin');
 if (connected) {
   history.replaceState({}, '', location.pathname);
   const notice = document.createElement('p');
@@ -117,7 +118,7 @@ if (fas) {
     .catch(error => { portalError = error.message; });
 } else if (mikrotikPortal) {
   history.replaceState({}, '', location.pathname);
-  portalReady = requestPortalContext('/api/mikrotik/context', { clientMac, clientIp })
+  portalReady = requestPortalContext('/api/mikrotik/context', { clientMac, clientIp, hotspotLoginUrl })
     .then(value => { portalToken = value; portalTokenCreatedAt = Date.now(); portalError = null; })
     .catch(error => { portalError = error.message; });
 }

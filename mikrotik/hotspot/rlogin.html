@@ -12,9 +12,13 @@
   <script>
     // Build the URL in JavaScript so RouterOS can substitute its variables
     // without parsing them inside a meta-refresh attribute.
-    const portal = 'https://technch-yey9.vercel.app/?gateway=mikrotik&clientmac=$(mac)&clientip=$(ip)';
+    const portal = new URL('https://technch-yey9.vercel.app/');
+    portal.searchParams.set('gateway', 'mikrotik');
+    portal.searchParams.set('clientmac', '$(mac)');
+    portal.searchParams.set('clientip', '$(ip)');
+    portal.searchParams.set('hotspotlogin', '$(link-login-only)');
     document.querySelector('a').href = portal;
-    window.location.replace(portal);
+    window.location.replace(portal.toString());
   </script>
 </body>
 </html>
