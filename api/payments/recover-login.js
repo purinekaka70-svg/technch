@@ -28,12 +28,17 @@ function transactionRows(value, rows = []) {
   return rows;
 }
 
-async function reconcilePayments(db, phone, macAddress, receipt) {
-  const { data: candidates, error } = await db.from('payments').select('id,phone,checkout_request_id,status,mpesa_receipt_number,amount_kes')
-    .eq('mac_address', macAddress).in('status', ['PENDING', 'SUCCESS', 'FAILED']).limit(50);
+async function reconcilePayments(db, phone, receipt) {
+  // A client can reconnect with a refreshed hotspot context or randomized MAC.
+  // Find this phone's recent records first, then reconcile only the receipt that
+  // CloudPay confirms; the original gateway/device binding is checked later.
+  const { data: candidates, error } = await db.from('payments')
+    .select('id,phone,checkout_request_id,status,mpesa_receipt_number,raw_callback,amount_kes')
+    .eq('phone', phone).in('status', ['PENDING', 'SUCCESS', 'FAILED'])
+    .order('created_at', { ascending: false }).limit(30);
   if (error) return true;
   const candidatesNeedingLookup = (candidates || []).filter(payment =>
-    kenyaPhone(payment.phone) === phone && (payment.status !== 'SUCCESS' || !payment.mpesa_receipt_number)
+    kenyaPhone(payment.phone) === phone && (payment.status !== 'SUCCESS' || !paymentReceipts(payment).includes(receipt))
   );
   if (!candidatesNeedingLookup.length) return false;
   const base = cloudPayBase();
@@ -50,6 +55,7 @@ async function reconcilePayments(db, phone, macAddress, receipt) {
       });
       if (!response.ok) { providerUnavailable = true; continue; }
       const result = await response.json();
+      if (!cloudPayReceipts(result).includes(receipt)) continue;
       const providerResult = cloudPayPayment(result);
       const status = cloudPayStatus(providerResult.status);
       if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) continue;
@@ -132,7 +138,7 @@ export default async function handler(req, res) {
 
   // A webhook can be delayed or missed. Ask CloudPay about this customer's
   // pending transactions on this exact device before declaring their receipt unknown.
-  const providerUnavailable = await reconcilePayments(db, normalizedPhone, currentContext.mac_address, normalizedReceipt);
+  const providerUnavailable = await reconcilePayments(db, normalizedPhone, normalizedReceipt);
 
   const paymentFields = 'id,phone,mikrotik_portal_context_id,mpesa_receipt_number,raw_callback';
   const { data: receiptMatches, error: receiptError } = await db.from('payments').select(paymentFields)
@@ -160,7 +166,7 @@ export default async function handler(req, res) {
   }
   if (!payment) {
     const { data: stillPending, error: pendingError } = await db.from('payments').select('id')
-      .eq('status', 'PENDING').eq('phone', normalizedPhone).eq('mac_address', currentContext.mac_address).limit(1);
+      .eq('status', 'PENDING').eq('phone', normalizedPhone).limit(1);
     if (pendingError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
     if (stillPending?.length) return res.status(409).json({ error: 'CloudPay has not confirmed this payment yet. Do not pay again; wait briefly, then tap Restore access again.' });
     if (providerUnavailable) return res.status(503).json({ error: 'CloudPay could not be reached to verify this receipt. Do not pay again; wait a moment and tap Restore access again.' });
