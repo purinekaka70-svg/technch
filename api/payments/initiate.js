@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   const tokenHash = createHash('sha256').update(portalToken).digest('hex');
   const contextTable = isMikrotikAgentMode() ? 'mikrotik_portal_contexts' : 'opennds_portal_contexts';
   const contextFields = isMikrotikAgentMode() ? 'id,mac_address,client_ip,gateway_id,consumed_at' : 'id,mac_address,consumed_at';
-  const { data: context, error: contextError } = await db.from(contextTable).select(contextFields).eq('token_hash', tokenHash).gt('expires_at', new Date().toISOString()).maybeSingle();
+  const { data: context, error: contextError } = await db.from(contextTable).select(`${contextFields},expires_at`).eq('token_hash', tokenHash).maybeSingle();
   if (contextError) {
     console.error('Portal context lookup failed', { code: contextError.code, message: contextError.message });
     return res.status(503).json({ error: 'Hotspot session could not be verified. Please reconnect and try again.' });
@@ -27,7 +27,9 @@ export default async function handler(req, res) {
   // Firestore distinguishes a missing field from an explicit null. Older
   // portal records may omit consumed_at, so check consumption in JS instead
   // of filtering with Firestore's exact-null query.
-  if (!isPortalContextUsable(context)) return res.status(400).json({ error: 'Hotspot session expired or already used. Reopen the Wi-Fi portal and try again.' });
+  if (!context) return res.status(400).json({ error: 'Hotspot session could not be found. Reopen the Wi-Fi portal and try again.' });
+  if (context.consumed_at != null) return res.status(409).json({ error: 'This checkout has already been used. Check your phone for the payment result before trying again.' });
+  if (!isPortalContextUsable(context)) return res.status(400).json({ code: 'PORTAL_CONTEXT_EXPIRED', paymentStarted: false, error: 'The hotspot checkout session expired. Refreshing this device…' });
   if (isMikrotikAgentMode()) {
     const gatewayId = mikrotikGatewayId();
     if (!gatewayId || context.gateway_id !== gatewayId) {

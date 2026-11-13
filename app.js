@@ -323,9 +323,18 @@ const handlePaymentSubmit = async event => {
   setPaymentStatus('Sending STK...', true);
   try {
     console.log('Calling /api/pay');
-    const response = await fetchWithTimeout('/api/pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packageId: selected.id, phone, portalToken, packageName: selected.name }) }, 35000);
+    const checkoutOptions = () => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packageId: selected.id, phone, portalToken, packageName: selected.name }) });
+    let response = await fetchWithTimeout('/api/pay', checkoutOptions(), 35000);
     let result = {};
     try { result = await response.json(); } catch { /* preserve the HTTP result for safe retry handling */ }
+    if (!response.ok && result.code === 'PORTAL_CONTEXT_EXPIRED' && result.paymentStarted === false) {
+      setPaymentStatus('Refreshing this device’s hotspot session…', true);
+      try { await refreshPortalContext(); }
+      catch (error) { restorePayButton(`${error.message || 'Could not refresh the hotspot session.'} Reopen the hotspot sign-in page and try again.`); return; }
+      response = await fetchWithTimeout('/api/pay', checkoutOptions(), 35000);
+      result = {};
+      try { result = await response.json(); } catch { /* preserve the HTTP result for safe retry handling */ }
+    }
     console.log('API response', { status: response.status, ok: response.ok, body: result });
     if (!response.ok) {
       const message = result.error || 'Could not start payment.';
