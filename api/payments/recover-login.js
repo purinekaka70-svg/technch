@@ -3,9 +3,14 @@ import { firebaseDb } from '../../lib/firebase-db.js';
 import { isGatewayConfigured, isMikrotikAgentMode, mikrotikGatewayId, mikrotikHotspotLoginUrl, mikrotikLoginCredentials } from '../../lib/gateway.js';
 import { cloudPayBase, cloudPayToken } from '../../lib/cloudpay-api.js';
 import { applyCloudPayResult } from '../../lib/cloudpay-result.js';
-import { cloudPayPayment, cloudPayReceipt, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
+import { cloudPayPayment, cloudPayReceipt, cloudPayReceipts, cloudPayStatus, normalizeCloudPayResult } from '../../lib/cloudpay-normalize.js';
 
 const kenyaPhone = value => String(value || '').replace(/\D/g, '').replace(/^0/, '254');
+const normalizeReceipt = value => String(value || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+const paymentReceipts = payment => [...new Set([
+  normalizeReceipt(payment.mpesa_receipt_number),
+  ...cloudPayReceipts(payment.raw_callback)
+].filter(Boolean))];
 
 function transactionRows(value, rows = []) {
   if (Array.isArray(value)) {
@@ -112,7 +117,7 @@ export default async function handler(req, res) {
   const { portalToken, phone, receipt } = req.body || {};
   if (!/^[a-f0-9]{64}$/.test(portalToken || '')) return res.status(400).json({ error: 'Reopen the sign-in page from Technch- HOTSPOT before restoring access.' });
   const normalizedPhone = kenyaPhone(phone);
-  const normalizedReceipt = String(receipt || '').trim().toUpperCase();
+  const normalizedReceipt = normalizeReceipt(receipt);
   if (!/^(?:254(?:1|7)\d{8})$/.test(normalizedPhone) || !/^[A-Z0-9]{6,20}$/.test(normalizedReceipt)) {
     return res.status(400).json({ error: 'Enter the M-Pesa phone number and receipt exactly as shown in the payment message.' });
   }
@@ -133,13 +138,25 @@ export default async function handler(req, res) {
   const { data: receiptMatches, error: receiptError } = await db.from('payments').select(paymentFields)
     .eq('status', 'SUCCESS').eq('mpesa_receipt_number', normalizedReceipt).limit(20);
   if (receiptError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
-  let payment = (receiptMatches || []).find(item => kenyaPhone(item.phone) === normalizedPhone) || null;
+  let payment = (receiptMatches || []).find(item => kenyaPhone(item.phone) === normalizedPhone
+    && paymentReceipts(item).includes(normalizedReceipt)) || null;
   if (!payment) {
     const { data: successfulPayments, error: paymentError } = await db.from('payments').select(paymentFields)
       .eq('status', 'SUCCESS').eq('phone', normalizedPhone).limit(100);
     if (paymentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
     payment = (successfulPayments || []).find(item => kenyaPhone(item.phone) === normalizedPhone
-      && String(item.mpesa_receipt_number || cloudPayReceipt(item.raw_callback) || '').trim().toUpperCase() === normalizedReceipt) || null;
+      && paymentReceipts(item).includes(normalizedReceipt)) || null;
+  }
+  // Older records may have stored the phone with a leading zero or country
+  // prefix formatting, and some callbacks put the receipt in a nested field.
+  // Search a bounded recent success window, then still require exact normalized
+  // phone + receipt and validate the original gateway/device below.
+  if (!payment) {
+    const { data: recentPayments, error: recentError } = await db.from('payments')
+      .select(paymentFields).eq('status', 'SUCCESS').order('created_at', { ascending: false }).limit(500);
+    if (recentError) return res.status(503).json({ error: 'Could not verify the payment right now. Try again shortly.' });
+    payment = (recentPayments || []).find(item => kenyaPhone(item.phone) === normalizedPhone
+      && paymentReceipts(item).includes(normalizedReceipt)) || null;
   }
   if (!payment) {
     const { data: stillPending, error: pendingError } = await db.from('payments').select('id')
